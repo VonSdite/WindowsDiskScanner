@@ -100,7 +100,7 @@
                     <ProgressBar Height="7"
                                  VerticalAlignment="Center"
                                  Maximum="100"
-                                 Value="{Binding PercentOfRoot}"
+                                 Value="{Binding PercentOfRoot, Mode=OneWay}"
                                  Foreground="#4F82EA"
                                  Background="#E8EEF8"
                                  BorderThickness="0" />
