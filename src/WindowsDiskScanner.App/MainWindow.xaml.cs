@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
@@ -15,12 +14,12 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        RootItems = [];
+        Rows = [];
         DataContext = this;
         RootPathTextBox.Text = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
     }
 
-    public ObservableCollection<ScanNode> RootItems { get; }
+    public List<TreeRow> Rows { get; }
 
     private async void ScanButton_Click(object sender, RoutedEventArgs e) =>
         await StartScanAsync();
@@ -61,7 +60,8 @@ public partial class MainWindow : Window
         _scanCancellation = new CancellationTokenSource();
         CancellationToken cancellationToken = _scanCancellation.Token;
         SetScanningState(isScanning: true);
-        RootItems.Clear();
+        Rows.Clear();
+        DirectoryGrid.Items.Refresh();
         ResetSummary();
 
         Progress<ScanProgress> progress = new(UpdateProgress);
@@ -69,7 +69,8 @@ public partial class MainWindow : Window
         try
         {
             ScanResult result = await _scanner.ScanAsync(path, progress, cancellationToken);
-            RootItems.Add(result.Root);
+            Rows.Add(new TreeRow(result.Root, depth: 0));
+            DirectoryGrid.Items.Refresh();
             EmptyState.Visibility = Visibility.Collapsed;
             ShowResult(result);
         }
@@ -90,6 +91,49 @@ public partial class MainWindow : Window
             _scanCancellation = null;
             SetScanningState(isScanning: false);
         }
+    }
+
+    private void ExpanderButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: TreeRow row })
+        {
+            return;
+        }
+
+        int rowIndex = Rows.IndexOf(row);
+        if (rowIndex < 0)
+        {
+            return;
+        }
+
+        if (row.IsExpanded)
+        {
+            int removeStart = rowIndex + 1;
+            int removeCount = 0;
+            while (removeStart + removeCount < Rows.Count && Rows[removeStart + removeCount].Depth > row.Depth)
+            {
+                removeCount++;
+            }
+
+            if (removeCount > 0)
+            {
+                Rows.RemoveRange(removeStart, removeCount);
+            }
+
+            row.IsExpanded = false;
+        }
+        else if (row.Node.Children is { Count: > 0 } children)
+        {
+            TreeRow[] childRows = children
+                .Select(child => new TreeRow(child, row.Depth + 1))
+                .ToArray();
+
+            Rows.InsertRange(rowIndex + 1, childRows);
+            row.IsExpanded = true;
+        }
+
+        DirectoryGrid.Items.Refresh();
+        e.Handled = true;
     }
 
     private void UpdateProgress(ScanProgress progress)

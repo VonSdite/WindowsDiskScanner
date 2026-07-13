@@ -14,6 +14,7 @@
         <local:ByteSizeConverter x:Key="ByteSizeConverter" />
         <local:NodeIconConverter x:Key="NodeIconConverter" />
         <local:AccessOpacityConverter x:Key="AccessOpacityConverter" />
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
         <Style x:Key="PrimaryButton" TargetType="Button">
             <Setter Property="Background" Value="#2F6FED" />
@@ -59,67 +60,45 @@
             <Setter Property="BorderThickness" Value="1" />
         </Style>
 
-        <Style TargetType="TreeViewItem">
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="Padding" Value="1" />
+        <Style x:Key="GridHeader" TargetType="DataGridColumnHeader">
+            <Setter Property="Height" Value="43" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="Background" Value="#F7F9FC" />
+            <Setter Property="BorderBrush" Value="#E4E9F0" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Foreground" Value="#697991" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
 
-        <HierarchicalDataTemplate DataType="{x:Type local:ScanNode}" ItemsSource="{Binding Children}">
-            <Grid Height="38" Opacity="{Binding IsAccessible, Converter={StaticResource AccessOpacityConverter}}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="132" />
-                    <ColumnDefinition Width="176" />
-                    <ColumnDefinition Width="158" />
-                </Grid.ColumnDefinitions>
+        <Style x:Key="RightGridHeader" TargetType="DataGridColumnHeader" BasedOn="{StaticResource GridHeader}">
+            <Setter Property="HorizontalContentAlignment" Value="Right" />
+        </Style>
 
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Width="23"
-                               Margin="2,0,5,0"
-                               VerticalAlignment="Center"
-                               FontFamily="Segoe MDL2 Assets"
-                               FontSize="16"
-                               Foreground="#E6A325"
-                               Text="{Binding IsDirectory, Converter={StaticResource NodeIconConverter}}" />
-                    <TextBlock VerticalAlignment="Center"
-                               Foreground="#1D2B45"
-                               Text="{Binding Name}"
-                               TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding FullPath}" />
-                </StackPanel>
+        <Style x:Key="CenterGridHeader" TargetType="DataGridColumnHeader" BasedOn="{StaticResource GridHeader}">
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
 
-                <TextBlock Grid.Column="1"
-                           Margin="8,0"
-                           VerticalAlignment="Center"
-                           HorizontalAlignment="Right"
-                           FontFamily="Cascadia Mono, Consolas"
-                           Foreground="#24344F"
-                           Text="{Binding SizeBytes, Converter={StaticResource ByteSizeConverter}}" />
+        <Style x:Key="GridCell" TargetType="DataGridCell">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        </Style>
 
-                <Grid Grid.Column="2" Margin="16,0">
-                    <ProgressBar Height="7"
-                                 VerticalAlignment="Center"
-                                 Maximum="100"
-                                 Value="{Binding PercentOfRoot, Mode=OneWay}"
-                                 Foreground="#4F82EA"
-                                 Background="#E8EEF8"
-                                 BorderThickness="0" />
-                    <TextBlock HorizontalAlignment="Right"
-                               VerticalAlignment="Center"
-                               Margin="0,0,2,18"
-                               FontSize="10"
-                               Foreground="#66758C"
-                               Text="{Binding PercentOfRoot, StringFormat={}{0:N2}%}" />
-                </Grid>
-
-                <TextBlock Grid.Column="3"
-                           Margin="8,0,12,0"
-                           VerticalAlignment="Center"
-                           HorizontalAlignment="Right"
-                           Foreground="#66758C"
-                           Text="{Binding LastWriteTime, StringFormat={}{0:yyyy-MM-dd HH:mm}}" />
-            </Grid>
-        </HierarchicalDataTemplate>
+        <Style x:Key="GridRow" TargetType="DataGridRow">
+            <Setter Property="Height" Value="38" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#EEF2F7" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Opacity" Value="{Binding Node.IsAccessible, Converter={StaticResource AccessOpacityConverter}}" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#F4F7FC" />
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#EAF1FD" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -209,37 +188,122 @@
 
         <Border Grid.Row="3" Margin="24,0" Background="White" BorderBrush="#E1E7EF" BorderThickness="1" CornerRadius="10">
             <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="43" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <Border Grid.Row="0" Background="#F7F9FC" BorderBrush="#E4E9F0" BorderThickness="0,0,0,1" CornerRadius="10,10,0,0">
-                    <Grid Margin="34,0,10,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="132" />
-                            <ColumnDefinition Width="176" />
-                            <ColumnDefinition Width="158" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock VerticalAlignment="Center" Foreground="#697991" FontWeight="SemiBold" Text="名称" />
-                        <TextBlock Grid.Column="1" Margin="8,0" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="#697991" FontWeight="SemiBold" Text="大小" />
-                        <TextBlock Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#697991" FontWeight="SemiBold" Text="占总目录比例" />
-                        <TextBlock Grid.Column="3" Margin="8,0,12,0" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="#697991" FontWeight="SemiBold" Text="修改时间" />
-                    </Grid>
-                </Border>
-
-                <TreeView x:Name="DirectoryTree"
-                          Grid.Row="1"
-                          Margin="8"
-                          Padding="4"
-                          ItemsSource="{Binding RootItems}"
-                          Background="Transparent"
+                <DataGrid x:Name="DirectoryGrid"
+                          ItemsSource="{Binding Rows}"
+                          AutoGenerateColumns="False"
+                          Background="White"
                           BorderThickness="0"
-                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                          VirtualizingStackPanel.IsVirtualizing="True"
-                          VirtualizingStackPanel.VirtualizationMode="Recycling" />
+                          CanUserAddRows="False"
+                          CanUserDeleteRows="False"
+                          CanUserReorderColumns="False"
+                          CanUserResizeRows="False"
+                          CanUserSortColumns="False"
+                          CellStyle="{StaticResource GridCell}"
+                          ColumnHeaderStyle="{StaticResource GridHeader}"
+                          EnableColumnVirtualization="True"
+                          EnableRowVirtualization="True"
+                          GridLinesVisibility="None"
+                          HeadersVisibility="Column"
+                          IsReadOnly="True"
+                          RowHeaderWidth="0"
+                          RowStyle="{StaticResource GridRow}"
+                          SelectionMode="Single"
+                          SelectionUnit="FullRow"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="名称" Width="*" MinWidth="260">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="10,0,8,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="18" />
+                                            <ColumnDefinition Width="27" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Width="{Binding IndentWidth}" />
+                                        <Button Grid.Column="1"
+                                                Width="16"
+                                                Height="20"
+                                                Padding="0"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Click="ExpanderButton_Click"
+                                                Content="{Binding ExpanderGlyph}"
+                                                Cursor="Hand"
+                                                FontSize="9"
+                                                Foreground="#52647D"
+                                                Visibility="{Binding HasChildren, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        <TextBlock Grid.Column="2"
+                                                   VerticalAlignment="Center"
+                                                   FontFamily="Segoe MDL2 Assets"
+                                                   FontSize="16"
+                                                   Foreground="#E6A325"
+                                                   Text="{Binding Node.IsDirectory, Converter={StaticResource NodeIconConverter}}" />
+                                        <TextBlock Grid.Column="3"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="#1D2B45"
+                                                   Text="{Binding Node.Name}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding Node.FullPath}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
 
-                <StackPanel x:Name="EmptyState" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <DataGridTemplateColumn Header="大小" Width="132" HeaderStyle="{StaticResource RightGridHeader}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Margin="8,0,12,0"
+                                               HorizontalAlignment="Right"
+                                               VerticalAlignment="Center"
+                                               FontFamily="Cascadia Mono, Consolas"
+                                               Foreground="#24344F"
+                                               Text="{Binding Node.SizeBytes, Converter={StaticResource ByteSizeConverter}}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <DataGridTemplateColumn Header="占总目录比例" Width="176" HeaderStyle="{StaticResource CenterGridHeader}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="16,0">
+                                        <ProgressBar Height="7"
+                                                     VerticalAlignment="Center"
+                                                     Maximum="100"
+                                                     Value="{Binding Node.PercentOfRoot, Mode=OneWay}"
+                                                     Foreground="#4F82EA"
+                                                     Background="#E8EEF8"
+                                                     BorderThickness="0" />
+                                        <TextBlock Margin="0,0,2,18"
+                                                   HorizontalAlignment="Right"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="10"
+                                                   Foreground="#66758C"
+                                                   Text="{Binding Node.PercentOfRoot, StringFormat={}{0:N2}%}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <DataGridTemplateColumn Header="修改时间" Width="158" HeaderStyle="{StaticResource RightGridHeader}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Margin="8,0,12,0"
+                                               HorizontalAlignment="Right"
+                                               VerticalAlignment="Center"
+                                               Foreground="#66758C"
+                                               Text="{Binding Node.LastWriteTime, StringFormat={}{0:yyyy-MM-dd HH:mm}}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock HorizontalAlignment="Center" FontFamily="Segoe MDL2 Assets" FontSize="42" Foreground="#9EADC1" Text="&#xE9D9;" />
                     <TextBlock Margin="0,13,0,0" Foreground="#5D6E86" FontSize="15" FontWeight="SemiBold" Text="等待扫描目录" />
                     <TextBlock Margin="0,5,0,0" Foreground="#8A97A9" Text="扫描完成后，点击箭头展开目录和文件" />
