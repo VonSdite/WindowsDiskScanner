@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>WindowsDiskScanner.App</RootNamespace>
+    <AssemblyName>WindowsDiskScanner</AssemblyName>
+    <ApplicationIcon />
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WindowsDiskScanner.Core\WindowsDiskScanner.Core.csproj" />
+  </ItemGroup>
+</Project>
