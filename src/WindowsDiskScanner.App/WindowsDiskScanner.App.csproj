@@ -7,7 +7,4 @@
     <AssemblyName>WindowsDiskScanner</AssemblyName>
     <ApplicationIcon />
   </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\WindowsDiskScanner.Core\WindowsDiskScanner.Core.csproj" />
-  </ItemGroup>
 </Project>

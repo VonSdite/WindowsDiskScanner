@@ -1,8 +1,9 @@
 using System.Diagnostics;
+using System.IO;
 using System.IO.Enumeration;
 using System.Threading.Channels;
 
-namespace WindowsDiskScanner.Core;
+namespace WindowsDiskScanner.App;
 
 public sealed class DiskScanner
 {
@@ -65,7 +66,7 @@ public sealed class DiskScanner
         ReportProgress(root.FullPath, force: true);
 
         Task[] workers = Enumerable.Range(0, _workerCount)
-            .Select(_ => ScanWorkerAsync())
+            .Select(_ => Task.Run(ScanWorkerAsync))
             .ToArray();
 
         await Task.WhenAll(workers).ConfigureAwait(false);

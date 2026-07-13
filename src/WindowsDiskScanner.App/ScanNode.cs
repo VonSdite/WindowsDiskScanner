@@ -1,4 +1,4 @@
-namespace WindowsDiskScanner.Core;
+namespace WindowsDiskScanner.App;
 
 public sealed class ScanNode
 {

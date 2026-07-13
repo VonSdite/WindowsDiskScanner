@@ -22,13 +22,10 @@
 dotnet run --project src/WindowsDiskScanner.App
 ```
 
-程序启动后会自动扫描 Windows 目录。也可以取消当前扫描，选择任意本地目录后重新开始。普通权限下无法读取的系统目录会被跳过；需要完整结果时可使用管理员权限运行。
+程序启动后默认选中 Windows 目录，但不会自动开始扫描。确认目录后点击“开始扫描”；也可以选择任意本地目录。普通权限下无法读取的系统目录会被跳过，需要完整结果时可使用管理员权限运行。
 
-## 构建与验证
+## 构建
 
 ```powershell
 dotnet build WindowsDiskScanner.sln -c Release
-dotnet run --project tests/WindowsDiskScanner.Verification -c Release
 ```
-
-验证程序会创建临时目录，检查递归大小汇总、目录与文件计数、排序、占比和取消行为，完成后删除临时数据。

@@ -3,7 +3,6 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using Microsoft.Win32;
-using WindowsDiskScanner.Core;
 
 namespace WindowsDiskScanner.App;
 
@@ -12,7 +11,6 @@ public partial class MainWindow : Window
     private readonly DiskScanner _scanner = new();
     private readonly ByteSizeConverter _byteSizeConverter = new();
     private CancellationTokenSource? _scanCancellation;
-    private bool _initialScanStarted;
 
     public MainWindow()
     {
@@ -23,17 +21,6 @@ public partial class MainWindow : Window
     }
 
     public ObservableCollection<ScanNode> RootItems { get; }
-
-    private async void Window_Loaded(object sender, RoutedEventArgs e)
-    {
-        if (_initialScanStarted)
-        {
-            return;
-        }
-
-        _initialScanStarted = true;
-        await StartScanAsync();
-    }
 
     private async void ScanButton_Click(object sender, RoutedEventArgs e) =>
         await StartScanAsync();

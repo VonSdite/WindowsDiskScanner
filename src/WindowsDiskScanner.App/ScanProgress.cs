@@ -1,4 +1,4 @@
-namespace WindowsDiskScanner.Core;
+namespace WindowsDiskScanner.App;
 
 public sealed record ScanProgress(
     string CurrentPath,

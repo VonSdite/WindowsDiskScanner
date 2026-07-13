@@ -2,7 +2,6 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:WindowsDiskScanner.App"
-        xmlns:core="clr-namespace:WindowsDiskScanner.Core;assembly=WindowsDiskScanner.Core"
         Title="Windows 磁盘空间扫描器"
         Width="1180"
         Height="760"
@@ -10,7 +9,6 @@
         MinHeight="600"
         Background="#F3F6FA"
         FontFamily="Segoe UI, Microsoft YaHei UI"
-        Loaded="Window_Loaded"
         Closing="Window_Closing">
     <Window.Resources>
         <local:ByteSizeConverter x:Key="ByteSizeConverter" />
@@ -66,7 +64,7 @@
             <Setter Property="Padding" Value="1" />
         </Style>
 
-        <HierarchicalDataTemplate DataType="{x:Type core:ScanNode}" ItemsSource="{Binding Children}">
+        <HierarchicalDataTemplate DataType="{x:Type local:ScanNode}" ItemsSource="{Binding Children}">
             <Grid Height="38" Opacity="{Binding IsAccessible, Converter={StaticResource AccessOpacityConverter}}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
