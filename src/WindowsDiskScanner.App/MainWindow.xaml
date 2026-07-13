@@ -274,7 +274,7 @@
                                         <ProgressBar Height="7"
                                                      VerticalAlignment="Center"
                                                      Maximum="100"
-                                                     Value="{Binding Node.PercentOfRoot, Mode=OneWay}"
+                                                     Value="{Binding PercentOfRoot, Mode=OneWay}"
                                                      Foreground="#4F82EA"
                                                      Background="#E8EEF8"
                                                      BorderThickness="0" />
@@ -283,7 +283,7 @@
                                                    VerticalAlignment="Center"
                                                    FontSize="10"
                                                    Foreground="#66758C"
-                                                   Text="{Binding Node.PercentOfRoot, StringFormat={}{0:N2}%}" />
+                                                   Text="{Binding PercentOfRoot, StringFormat={}{0:N2}%}" />
                                     </Grid>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>

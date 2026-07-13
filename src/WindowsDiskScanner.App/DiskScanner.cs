@@ -74,7 +74,6 @@ public sealed class DiskScanner
 
         AggregateDirectorySizes(root);
         SortTree(root);
-        SetPercentages(root);
         stopwatch.Stop();
         ReportProgress(root.FullPath, force: true);
 
@@ -123,12 +122,12 @@ public sealed class DiskScanner
                     {
                         ScanNode childDirectory = new(
                             entry.Name,
-                            entry.FullPath,
+                            Path.Combine(directory.FullPath, entry.Name),
                             isDirectory: true,
                             sizeBytes: 0,
                             entry.LastWriteTime);
 
-                        directory.Children!.Add(childDirectory);
+                        directory.AddChild(childDirectory);
                         Interlocked.Increment(ref directoryCount);
                         Interlocked.Increment(ref pendingDirectories);
 
@@ -141,12 +140,12 @@ public sealed class DiskScanner
                     {
                         ScanNode file = new(
                             entry.Name,
-                            entry.FullPath,
+                            directory.FullPath,
                             isDirectory: false,
                             entry.Length,
                             entry.LastWriteTime);
 
-                        directory.Children!.Add(file);
+                        directory.AddChild(file);
                         Interlocked.Increment(ref fileCount);
                         Interlocked.Add(ref discoveredBytes, entry.Length);
                     }
@@ -199,7 +198,6 @@ public sealed class DiskScanner
             directoryPath,
             static (ref FileSystemEntry entry) => new FileEntry(
                 entry.FileName.ToString(),
-                entry.ToFullPath(),
                 entry.IsDirectory,
                 entry.IsDirectory ? 0 : entry.Length,
                 entry.LastWriteTimeUtc.LocalDateTime),
@@ -225,8 +223,14 @@ public sealed class DiskScanner
 
             if (!item.Visited)
             {
+                if (item.Node.Children is null)
+                {
+                    item.Node.SizeBytes = 0;
+                    continue;
+                }
+
                 stack.Push((item.Node, true));
-                foreach (ScanNode child in item.Node.Children!)
+                foreach (ScanNode child in item.Node.Children)
                 {
                     if (child.IsDirectory)
                     {
@@ -254,37 +258,18 @@ public sealed class DiskScanner
 
         while (stack.TryPop(out ScanNode? directory))
         {
-            directory.Children!.Sort(CompareNodes);
-            foreach (ScanNode child in directory.Children)
+            if (directory.Children is not { } children)
+            {
+                continue;
+            }
+
+            children.Sort(CompareNodes);
+            foreach (ScanNode child in children)
             {
                 if (child.IsDirectory)
                 {
                     stack.Push(child);
                 }
-            }
-        }
-    }
-
-    private static void SetPercentages(ScanNode root)
-    {
-        double totalBytes = root.SizeBytes;
-        Stack<ScanNode> stack = new();
-        stack.Push(root);
-
-        while (stack.TryPop(out ScanNode? node))
-        {
-            node.PercentOfRoot = totalBytes == 0
-                ? 0
-                : node.SizeBytes / totalBytes * 100;
-
-            if (node.Children is null)
-            {
-                continue;
-            }
-
-            foreach (ScanNode child in node.Children)
-            {
-                stack.Push(child);
             }
         }
     }
@@ -317,7 +302,6 @@ public sealed class DiskScanner
 
     private readonly record struct FileEntry(
         string Name,
-        string FullPath,
         bool IsDirectory,
         long Length,
         DateTime LastWriteTime);

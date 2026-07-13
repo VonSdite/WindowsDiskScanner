@@ -69,7 +69,7 @@ public partial class MainWindow : Window
         try
         {
             ScanResult result = await _scanner.ScanAsync(path, progress, cancellationToken);
-            Rows.Add(new TreeRow(result.Root, depth: 0));
+            Rows.Add(new TreeRow(result.Root, depth: 0, result.Root.SizeBytes));
             DirectoryGrid.Items.Refresh();
             EmptyState.Visibility = Visibility.Collapsed;
             ShowResult(result);
@@ -125,7 +125,7 @@ public partial class MainWindow : Window
         else if (row.Node.Children is { Count: > 0 } children)
         {
             TreeRow[] childRows = children
-                .Select(child => new TreeRow(child, row.Depth + 1))
+                .Select(child => new TreeRow(child, row.Depth + 1, row.RootSizeBytes))
                 .ToArray();
 
             Rows.InsertRange(rowIndex + 1, childRows);

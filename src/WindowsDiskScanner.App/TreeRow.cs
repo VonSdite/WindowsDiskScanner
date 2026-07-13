@@ -7,19 +7,26 @@ public sealed class TreeRow : INotifyPropertyChanged
 {
     private bool _isExpanded;
 
-    public TreeRow(ScanNode node, int depth)
+    public TreeRow(ScanNode node, int depth, long rootSizeBytes)
     {
         Node = node;
         Depth = depth;
+        RootSizeBytes = rootSizeBytes;
     }
 
     public ScanNode Node { get; }
 
     public int Depth { get; }
 
+    public long RootSizeBytes { get; }
+
     public double IndentWidth => Depth * 20;
 
     public bool HasChildren => Node.Children is { Count: > 0 };
+
+    public double PercentOfRoot => RootSizeBytes == 0
+        ? 0
+        : Node.SizeBytes / (double)RootSizeBytes * 100;
 
     public bool IsExpanded
     {
