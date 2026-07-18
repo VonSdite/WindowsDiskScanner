@@ -13,7 +13,6 @@
         Closing="Window_Closing">
     <Window.Resources>
         <local:ByteSizeConverter x:Key="ByteSizeConverter" />
-        <local:NodeIconConverter x:Key="NodeIconConverter" />
         <local:AccessOpacityConverter x:Key="AccessOpacityConverter" />
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
@@ -85,8 +84,23 @@
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         </Style>
 
+        <Style x:Key="RowContextMenu" TargetType="ContextMenu">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#DCE4EF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="HasDropShadow" Value="True" />
+            <Setter Property="Padding" Value="4" />
+        </Style>
+
+        <Style x:Key="RowContextMenuItem" TargetType="MenuItem">
+            <Setter Property="Foreground" Value="#24344F" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+
         <Style x:Key="GridRow" TargetType="DataGridRow">
             <EventSetter Event="MouseDoubleClick" Handler="DirectoryRow_MouseDoubleClick" />
+            <EventSetter Event="PreviewMouseRightButtonDown" Handler="DirectoryRow_PreviewMouseRightButtonDown" />
             <Setter Property="Height" Value="38" />
             <Setter Property="Background" Value="White" />
             <Setter Property="BorderBrush" Value="#EEF2F7" />
@@ -128,19 +142,36 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Margin="3,0,12,0" VerticalAlignment="Center" Foreground="#50627E" FontWeight="SemiBold" Text="扫描目录" />
-                <TextBox x:Name="RootPathTextBox"
-                         Grid.Column="1"
-                         Height="38"
-                         Padding="10,7"
-                         VerticalContentAlignment="Center"
-                         Background="#F8FAFD"
-                         BorderBrush="#DCE4EF"
-                         BorderThickness="1"
-                         Cursor="Hand"
-                         FontFamily="Cascadia Mono, Consolas"
-                         FontSize="13"
-                         IsReadOnly="True"
-                         PreviewMouseLeftButtonDown="RootPathTextBox_PreviewMouseLeftButtonDown" />
+                <Grid Grid.Column="1">
+                    <TextBox x:Name="RootPathTextBox"
+                             Height="38"
+                             Padding="10,7"
+                             VerticalContentAlignment="Center"
+                             Background="#F8FAFD"
+                             BorderBrush="#DCE4EF"
+                             BorderThickness="1"
+                             Cursor="Hand"
+                             FontFamily="Cascadia Mono, Consolas"
+                             FontSize="13"
+                             IsReadOnly="True"
+                             PreviewMouseLeftButtonDown="RootPathTextBox_PreviewMouseLeftButtonDown" />
+                    <TextBlock Margin="11,0"
+                               VerticalAlignment="Center"
+                               Foreground="#8A98AC"
+                               IsHitTestVisible="False"
+                               Text="待选择，点击选择扫描目录">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Text, ElementName=RootPathTextBox}" Value="">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
                 <Button x:Name="ScanButton" Grid.Column="2" Margin="10,0,0,0" Style="{StaticResource PrimaryButton}" Content="开始扫描" Click="ScanButton_Click" />
                 <Button x:Name="CancelButton" Grid.Column="3" Margin="10,0,0,0" Style="{StaticResource SecondaryButton}" Content="取消" Click="CancelButton_Click" IsEnabled="False" />
             </Grid>
@@ -203,8 +234,39 @@
                           RowStyle="{StaticResource GridRow}"
                           SelectionMode="Single"
                           SelectionUnit="FullRow"
+                          ContextMenuOpening="DirectoryGrid_ContextMenuOpening"
                           VirtualizingPanel.IsVirtualizing="True"
                           VirtualizingPanel.VirtualizationMode="Recycling">
+                    <DataGrid.ContextMenu>
+                        <ContextMenu Style="{StaticResource RowContextMenu}">
+                            <MenuItem Header="在资源管理器中显示"
+                                      Click="ShowInExplorerMenuItem_Click"
+                                      Style="{StaticResource RowContextMenuItem}">
+                                <MenuItem.Icon>
+                                    <Viewbox Width="16" Height="16">
+                                        <Canvas Width="24" Height="24">
+                                            <Path Fill="#5279AE"
+                                                  Data="M19,19 L5,19 5,5 12,5 12,3 5,3 C3.9,3 3,3.9 3,5 L3,19 C3,20.1 3.9,21 5,21 L19,21 C20.1,21 21,20.1 21,19 L21,12 19,12 Z M14,3 L14,5 17.59,5 8.76,13.83 10.17,15.24 19,6.41 19,10 21,10 21,3 Z" />
+                                        </Canvas>
+                                    </Viewbox>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <Separator Margin="5,3" Background="#E6EBF2" />
+                            <MenuItem Header="移到回收站"
+                                      Click="MoveToRecycleBinMenuItem_Click"
+                                      Foreground="#C73E3E"
+                                      Style="{StaticResource RowContextMenuItem}">
+                                <MenuItem.Icon>
+                                    <Viewbox Width="16" Height="16">
+                                        <Canvas Width="24" Height="24">
+                                            <Path Fill="#C73E3E"
+                                                  Data="M9,3 L15,3 16,5 21,5 21,7 19,7 19,20 C19,21.1 18.1,22 17,22 L7,22 C5.9,22 5,21.1 5,20 L5,7 3,7 3,5 8,5 Z M7,7 L7,20 17,20 17,7 Z M9,9 L11,9 11,18 9,18 Z M13,9 L15,9 15,18 13,18 Z" />
+                                        </Canvas>
+                                    </Viewbox>
+                                </MenuItem.Icon>
+                            </MenuItem>
+                        </ContextMenu>
+                    </DataGrid.ContextMenu>
                     <DataGrid.Columns>
                         <DataGridTemplateColumn Header="名称" Width="*" MinWidth="260">
                             <DataGridTemplateColumn.CellTemplate>
@@ -213,7 +275,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="18" />
-                                            <ColumnDefinition Width="31" />
+                                            <ColumnDefinition Width="35" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <Border Width="{Binding IndentWidth}" />
@@ -231,20 +293,56 @@
                                                 FontSize="9"
                                                 Foreground="#52647D"
                                                 Visibility="{Binding HasChildren, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                        <Grid Grid.Column="2" Width="28" Height="22" HorizontalAlignment="Left" VerticalAlignment="Center">
-                                            <TextBlock HorizontalAlignment="Left"
-                                                       VerticalAlignment="Center"
-                                                       FontFamily="Segoe MDL2 Assets"
-                                                       FontSize="16"
-                                                       Foreground="#E6A325"
-                                                       Text="{Binding Node.IsDirectory, Converter={StaticResource NodeIconConverter}}" />
-                                            <TextBlock HorizontalAlignment="Right"
-                                                       VerticalAlignment="Bottom"
-                                                       FontFamily="Segoe MDL2 Assets"
-                                                       FontSize="10"
-                                                       Foreground="#2F6FED"
-                                                       Text="&#xE71B;"
-                                                       Visibility="{Binding Node.IsLink, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        <Grid Grid.Column="2" Width="30" Height="26" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                            <Viewbox Width="23" Height="23" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                                <Viewbox.Style>
+                                                    <Style TargetType="Viewbox">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Node.IsDirectory}" Value="False">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Viewbox.Style>
+                                                <Canvas Width="24" Height="24">
+                                                    <Path Fill="#E6A325"
+                                                          Data="M3,4 L9,4 11,6 21,6 C22.1,6 23,6.9 23,8 L23,18 C23,19.1 22.1,20 21,20 L3,20 C1.9,20 1,19.1 1,18 L1,6 C1,4.9 1.9,4 3,4 Z" />
+                                                </Canvas>
+                                            </Viewbox>
+                                            <Viewbox Width="22" Height="22" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                                <Viewbox.Style>
+                                                    <Style TargetType="Viewbox">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Node.IsDirectory}" Value="False">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Viewbox.Style>
+                                                <Canvas Width="24" Height="24">
+                                                    <Path Fill="#5279AE"
+                                                          Data="M6,2 L14,2 20,8 20,20 C20,21.1 19.1,22 18,22 L6,22 C4.9,22 4,21.1 4,20 L4,4 C4,2.9 4.9,2 6,2 Z" />
+                                                    <Path Fill="#E7F0FC" Data="M14,2 L20,8 14,8 Z" />
+                                                </Canvas>
+                                            </Viewbox>
+                                            <Border Width="15"
+                                                    Height="15"
+                                                    HorizontalAlignment="Right"
+                                                    VerticalAlignment="Bottom"
+                                                    Background="#2F6FED"
+                                                    BorderBrush="White"
+                                                    BorderThickness="1.5"
+                                                    CornerRadius="8"
+                                                    Visibility="{Binding Node.IsLink, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <Viewbox Width="9" Height="9">
+                                                    <Canvas Width="24" Height="24">
+                                                        <Path Fill="White"
+                                                              Data="M5,17.59 L15.59,7 9,7 9,5 19,5 19,15 17,15 17,8.41 6.41,19 Z" />
+                                                    </Canvas>
+                                                </Viewbox>
+                                            </Border>
                                         </Grid>
                                         <TextBlock Grid.Column="3"
                                                    VerticalAlignment="Center"

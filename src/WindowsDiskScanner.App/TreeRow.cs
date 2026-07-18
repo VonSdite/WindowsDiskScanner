@@ -18,7 +18,7 @@ public sealed class TreeRow : INotifyPropertyChanged
 
     public int Depth { get; }
 
-    public long RootSizeBytes { get; }
+    public long RootSizeBytes { get; private set; }
 
     public double IndentWidth => Depth * 20;
 
@@ -45,6 +45,28 @@ public sealed class TreeRow : INotifyPropertyChanged
     }
 
     public string ExpanderGlyph => IsExpanded ? "▼" : "▶";
+
+    internal void UpdateRootSizeBytes(long rootSizeBytes)
+    {
+        if (RootSizeBytes == rootSizeBytes)
+        {
+            return;
+        }
+
+        RootSizeBytes = rootSizeBytes;
+        OnPropertyChanged(nameof(RootSizeBytes));
+        OnPropertyChanged(nameof(PercentOfRoot));
+    }
+
+    internal void RefreshChildrenState()
+    {
+        if (!HasChildren)
+        {
+            IsExpanded = false;
+        }
+
+        OnPropertyChanged(nameof(HasChildren));
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
