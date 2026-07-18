@@ -14,15 +14,25 @@ public partial class MainWindow : Window
 {
     private readonly DiskScanner _scanner = new();
     private readonly ByteSizeConverter _byteSizeConverter = new();
+    private readonly ProviderStore _providerStore;
+    private readonly OpenAiChatClient _openAiChatClient;
     private CancellationTokenSource? _scanCancellation;
+    private CancellationTokenSource? _aiCancellation;
     private ScanResult? _currentResult;
+    private bool _aiOperationInProgress;
     private bool _fileOperationInProgress;
 
     public MainWindow()
     {
         InitializeComponent();
+        App app = (App)Application.Current;
+        _providerStore = app.ProviderStore;
+        _openAiChatClient = app.OpenAiChatClient;
         Rows = [];
         DataContext = this;
+        _providerStore.Changed += ProviderStore_Changed;
+        Loaded += (_, _) => RefreshAiModelOptions();
+        Closed += (_, _) => _providerStore.Changed -= ProviderStore_Changed;
     }
 
     public List<TreeRow> Rows { get; }
@@ -32,6 +42,55 @@ public partial class MainWindow : Window
 
     private void CancelButton_Click(object sender, RoutedEventArgs e) =>
         _scanCancellation?.Cancel();
+
+    private void ProviderManagementButton_Click(object sender, RoutedEventArgs e)
+    {
+        ProviderManagementWindow window = new(_providerStore, _openAiChatClient)
+        {
+            Owner = this
+        };
+        window.ShowDialog();
+        RefreshAiModelOptions();
+    }
+
+    private void ProviderStore_Changed(object? sender, EventArgs e)
+    {
+        if (Dispatcher.CheckAccess())
+        {
+            RefreshAiModelOptions();
+        }
+        else
+        {
+            Dispatcher.Invoke(RefreshAiModelOptions);
+        }
+    }
+
+    private void RefreshAiModelOptions()
+    {
+        string? currentKey = AiModelComboBox.SelectedItem is AiModelOption current
+            ? $"{current.Provider.Id}/{current.Model.Name}"
+            : null;
+        IReadOnlyList<AiModelOption> options = _providerStore.GetModelOptions();
+        AiModelComboBox.ItemsSource = options;
+        AiModelComboBox.SelectedItem = options.FirstOrDefault(option =>
+            string.Equals($"{option.Provider.Id}/{option.Model.Name}", currentKey, StringComparison.OrdinalIgnoreCase))
+            ?? options.FirstOrDefault();
+        AiModelComboBox.ToolTip = options.Count == 0 ? "请先配置 Provider 和模型" : null;
+        UpdateAiActionState();
+    }
+
+    private void AiModelComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        UpdateAiActionState();
+
+    private async void GenerateReportButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentResult is null || AiModelComboBox.SelectedItem is not AiModelOption option)
+        {
+            return;
+        }
+
+        await RunAiRequestAsync("AI 磁盘分析报告", option, AiPromptBuilder.BuildScanReport(_currentResult));
+    }
 
     private void RootPathTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -134,7 +193,16 @@ public partial class MainWindow : Window
     {
         if (sender is DataGridRow row)
         {
-            row.IsSelected = true;
+            if (!row.IsSelected)
+            {
+                if ((Keyboard.Modifiers & ModifierKeys.Control) == 0)
+                {
+                    DirectoryGrid.SelectedItems.Clear();
+                }
+
+                row.IsSelected = true;
+            }
+
             row.Focus();
         }
     }
@@ -144,15 +212,25 @@ public partial class MainWindow : Window
         if (Mouse.DirectlyOver is not DependencyObject source || FindDataGridRow(source) is null)
         {
             e.Handled = true;
+            return;
         }
+
+        int selectedCount = DirectoryGrid.SelectedItems.Count;
+        ShowInExplorerMenuItem.Visibility = selectedCount == 1 ? Visibility.Visible : Visibility.Collapsed;
+        AskAiMenuItem.IsEnabled = selectedCount > 0 && AiModelComboBox.SelectedItem is AiModelOption;
+        MoveToRecycleBinMenuItem.Header = selectedCount > 1
+            ? $"移到回收站（{selectedCount} 项）"
+            : "移到回收站";
     }
 
     private void ShowInExplorerMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (DirectoryGrid.SelectedItem is not TreeRow row)
+        if (GetSelectedRows().Count != 1)
         {
             return;
         }
+
+        TreeRow row = GetSelectedRows()[0];
 
         try
         {
@@ -174,16 +252,33 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void MoveToRecycleBinMenuItem_Click(object sender, RoutedEventArgs e)
+    private async void AskAiMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (_scanCancellation is not null ||
-            _fileOperationInProgress ||
-            DirectoryGrid.SelectedItem is not TreeRow row)
+        IReadOnlyList<TreeRow> selectedRows = GetSelectedRows();
+        if (selectedRows.Count == 0 || AiModelComboBox.SelectedItem is not AiModelOption option)
         {
             return;
         }
 
-        DeleteConfirmationDialog dialog = new(row.Node)
+        await RunAiRequestAsync("AI 文件解释", option, AiPromptBuilder.BuildNodeExplanation(selectedRows));
+    }
+
+    private async void MoveToRecycleBinMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_scanCancellation is not null ||
+            _fileOperationInProgress ||
+            DirectoryGrid.SelectedItems.Count == 0)
+        {
+            return;
+        }
+
+        IReadOnlyList<TreeRow> selectedRows = GetTopLevelSelectedRows();
+        if (selectedRows.Count == 0)
+        {
+            return;
+        }
+
+        DeleteConfirmationDialog dialog = new(selectedRows.Select(row => row.Node).ToArray())
         {
             Owner = this
         };
@@ -193,25 +288,23 @@ public partial class MainWindow : Window
             return;
         }
 
-        bool deleted = false;
         _fileOperationInProgress = true;
         SetFileOperationState(isBusy: true);
-        StatusText.Text = $"正在移到回收站：{row.Node.FullPath}";
+        StatusText.Text = selectedRows.Count == 1
+            ? $"正在移到回收站：{selectedRows[0].Node.FullPath}"
+            : $"正在将 {selectedRows.Count} 个项目移到回收站…";
         Mouse.OverrideCursor = Cursors.Wait;
+
+        RecycleBatchResult recycleResult;
 
         try
         {
-            await Task.Run(() => MoveNodeToRecycleBin(row.Node));
-            deleted = true;
+            recycleResult = await Task.Run(() => MoveNodesToRecycleBin(selectedRows));
         }
         catch (OperationCanceledException)
         {
             StatusText.Text = "已取消删除";
-        }
-        catch (Exception exception)
-        {
-            StatusText.Text = "删除失败";
-            MessageBox.Show(this, exception.Message, "无法移到回收站", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
         }
         finally
         {
@@ -220,19 +313,62 @@ public partial class MainWindow : Window
             SetFileOperationState(isBusy: false);
         }
 
-        if (!deleted)
+        if (recycleResult.DeletedRows.Count == 0)
         {
+            StatusText.Text = "删除失败";
+            if (recycleResult.Errors.Count > 0)
+            {
+                MessageBox.Show(this, string.Join(Environment.NewLine, recycleResult.Errors), "无法移到回收站", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
             return;
         }
 
-        if (row.Depth == 0)
+        TreeRow? deletedRoot = recycleResult.DeletedRows.FirstOrDefault(row => row.Depth == 0);
+        if (deletedRoot is not null)
         {
-            ClearResultsAfterRootDeletion(row.Node.FullPath);
+            ClearResultsAfterRootDeletion(deletedRoot.Node.FullPath);
         }
         else
         {
-            UpdateResultsAfterDeletion(row);
+            foreach (TreeRow deletedRow in recycleResult.DeletedRows.OrderByDescending(row => Rows.IndexOf(row)))
+            {
+                UpdateResultsAfterDeletion(deletedRow);
+            }
+
+            StatusText.Text = recycleResult.DeletedRows.Count == 1
+                ? $"已移到回收站：{recycleResult.DeletedRows[0].Node.FullPath}"
+                : $"已将 {recycleResult.DeletedRows.Count} 个项目移到回收站";
         }
+
+        if (recycleResult.Errors.Count > 0)
+        {
+            MessageBox.Show(
+                this,
+                string.Join(Environment.NewLine, recycleResult.Errors),
+                "部分项目未删除",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
+
+    private static RecycleBatchResult MoveNodesToRecycleBin(IReadOnlyList<TreeRow> rows)
+    {
+        List<TreeRow> deletedRows = [];
+        List<string> errors = [];
+        foreach (TreeRow row in rows)
+        {
+            try
+            {
+                MoveNodeToRecycleBin(row.Node);
+                deletedRows.Add(row);
+            }
+            catch (Exception exception)
+            {
+                errors.Add($"{row.Node.FullPath}：{exception.Message}");
+            }
+        }
+
+        return new RecycleBatchResult(deletedRows, errors);
     }
 
     private static void MoveNodeToRecycleBin(ScanNode node)
@@ -255,12 +391,108 @@ public partial class MainWindow : Window
         }
     }
 
+    private IReadOnlyList<TreeRow> GetSelectedRows() =>
+        DirectoryGrid.SelectedItems
+            .Cast<TreeRow>()
+            .OrderBy(row => Rows.IndexOf(row))
+            .ToArray();
+
+    private IReadOnlyList<TreeRow> GetTopLevelSelectedRows()
+    {
+        IReadOnlyList<TreeRow> selectedRows = GetSelectedRows();
+        HashSet<TreeRow> selectedSet = selectedRows.ToHashSet();
+        List<TreeRow> result = [];
+        foreach (TreeRow row in selectedRows)
+        {
+            int rowIndex = Rows.IndexOf(row);
+            int ancestorDepth = row.Depth - 1;
+            bool hasSelectedAncestor = false;
+            for (int index = rowIndex - 1; index >= 0 && ancestorDepth >= 0; index--)
+            {
+                TreeRow candidate = Rows[index];
+                if (candidate.Depth != ancestorDepth)
+                {
+                    continue;
+                }
+
+                if (selectedSet.Contains(candidate))
+                {
+                    hasSelectedAncestor = true;
+                    break;
+                }
+
+                ancestorDepth--;
+            }
+
+            if (!hasSelectedAncestor)
+            {
+                result.Add(row);
+            }
+        }
+
+        return result;
+    }
+
+    private async Task RunAiRequestAsync(string title, AiModelOption option, AiPrompt prompt)
+    {
+        if (_aiOperationInProgress)
+        {
+            return;
+        }
+
+        _aiOperationInProgress = true;
+        _aiCancellation = new CancellationTokenSource();
+        UpdateAiActionState();
+        StatusText.Text = $"正在调用 AI：{option.DisplayName}";
+        try
+        {
+            LlmProvider providerSnapshot = option.Provider.Clone();
+            string content = await _openAiChatClient.SendChatAsync(
+                providerSnapshot,
+                option.Model.Name,
+                prompt.SystemPrompt,
+                prompt.UserPrompt,
+                _aiCancellation.Token);
+            AiResultWindow resultWindow = new(title, option.DisplayName, content)
+            {
+                Owner = this
+            };
+            resultWindow.Show();
+            StatusText.Text = $"AI 分析完成：{option.DisplayName}";
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText.Text = "AI 请求已取消";
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = "AI 请求失败";
+            MessageBox.Show(this, exception.Message, "AI 请求失败", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _aiCancellation.Dispose();
+            _aiCancellation = null;
+            _aiOperationInProgress = false;
+            UpdateAiActionState();
+        }
+    }
+
+    private void UpdateAiActionState()
+    {
+        bool hasModel = AiModelComboBox.SelectedItem is AiModelOption;
+        bool controlsAvailable = !_aiOperationInProgress && !_fileOperationInProgress && _scanCancellation is null;
+        AiModelComboBox.IsEnabled = controlsAvailable && _providerStore.GetModelOptions().Count > 0;
+        GenerateReportButton.IsEnabled = controlsAvailable && hasModel && _currentResult is not null;
+    }
+
     private void SetFileOperationState(bool isBusy)
     {
         ScanButton.IsEnabled = !isBusy;
         RootPathTextBox.IsEnabled = !isBusy;
         DirectoryGrid.IsEnabled = !isBusy;
         CancelButton.IsEnabled = false;
+        UpdateAiActionState();
     }
 
     private void ClearResultsAfterRootDeletion(string deletedPath)
@@ -276,6 +508,7 @@ public partial class MainWindow : Window
         EmptyState.Visibility = Visibility.Visible;
         SkippedText.Text = string.Empty;
         StatusText.Text = $"已移到回收站：{deletedPath}";
+        UpdateAiActionState();
     }
 
     private void UpdateResultsAfterDeletion(TreeRow deletedRow)
@@ -471,6 +704,7 @@ public partial class MainWindow : Window
         SkippedText.Text = result.InaccessibleDirectoryCount == 0
             ? string.Empty
             : $"{result.InaccessibleDirectoryCount:N0} 个目录无法读取";
+        UpdateAiActionState();
     }
 
     private void SetScanningState(bool isScanning)
@@ -485,6 +719,8 @@ public partial class MainWindow : Window
             StatusText.Text = "正在准备扫描…";
             SkippedText.Text = string.Empty;
         }
+
+        UpdateAiActionState();
     }
 
     private void ResetSummary()
@@ -508,6 +744,13 @@ public partial class MainWindow : Window
         long FileCount,
         long InaccessibleDirectoryCount);
 
-    private void Window_Closing(object? sender, CancelEventArgs e) =>
+    private readonly record struct RecycleBatchResult(
+        IReadOnlyList<TreeRow> DeletedRows,
+        IReadOnlyList<string> Errors);
+
+    private void Window_Closing(object? sender, CancelEventArgs e)
+    {
         _scanCancellation?.Cancel();
+        _aiCancellation?.Cancel();
+    }
 }

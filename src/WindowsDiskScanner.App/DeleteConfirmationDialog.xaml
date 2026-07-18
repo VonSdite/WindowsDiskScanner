@@ -118,10 +118,10 @@
                     BorderThickness="1"
                     CornerRadius="10">
                 <StackPanel>
-                    <TextBlock Foreground="#172742"
+                    <TextBlock x:Name="PromptText"
+                               Foreground="#172742"
                                FontSize="15"
-                               FontWeight="SemiBold"
-                               Text="确定要移动以下项目吗？" />
+                               FontWeight="SemiBold" />
                     <Border Margin="0,14,0,0"
                             Padding="13,11"
                             Background="#F7F9FC"
@@ -129,9 +129,11 @@
                             BorderThickness="1"
                             CornerRadius="7">
                         <TextBlock x:Name="PathText"
+                                   MaxHeight="180"
                                    Foreground="#5F6F87"
                                    FontFamily="Cascadia Mono, Consolas"
                                    FontSize="12"
+                                   TextTrimming="CharacterEllipsis"
                                    TextWrapping="Wrap" />
                     </Border>
                 </StackPanel>

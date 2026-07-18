@@ -127,20 +127,35 @@
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0" Background="#14233C" Padding="28,21">
-            <StackPanel>
-                <TextBlock Foreground="White" FontSize="24" FontWeight="SemiBold" Text="Windows 磁盘空间扫描器" />
-                <TextBlock Margin="0,5,0,0" Foreground="#AFC2E2" Text="快速定位系统目录中的空间占用" />
-            </StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Foreground="White" FontSize="24" FontWeight="SemiBold" Text="Windows 磁盘空间扫描器" />
+                    <TextBlock Margin="0,5,0,0" Foreground="#AFC2E2" Text="快速定位系统目录中的空间占用" />
+                </StackPanel>
+                <Button Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Content="Provider 管理"
+                        Click="ProviderManagementButton_Click"
+                        Style="{StaticResource PrimaryButton}" />
+            </Grid>
         </Border>
 
         <Border Grid.Row="1" Margin="24,20,24,0" Padding="14" Background="White" BorderBrush="#E3E9F1" BorderThickness="1" CornerRadius="10">
             <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+
                 <TextBlock Margin="3,0,12,0" VerticalAlignment="Center" Foreground="#50627E" FontWeight="SemiBold" Text="扫描目录" />
                 <Grid Grid.Column="1">
                     <TextBox x:Name="RootPathTextBox"
@@ -172,8 +187,33 @@
                         </TextBlock.Style>
                     </TextBlock>
                 </Grid>
-                <Button x:Name="ScanButton" Grid.Column="2" Margin="10,0,0,0" Style="{StaticResource PrimaryButton}" Content="开始扫描" Click="ScanButton_Click" />
-                <Button x:Name="CancelButton" Grid.Column="3" Margin="10,0,0,0" Style="{StaticResource SecondaryButton}" Content="取消" Click="CancelButton_Click" IsEnabled="False" />
+                <StackPanel Grid.Column="2" Margin="10,0,0,0" Orientation="Horizontal">
+                    <Button x:Name="ScanButton" Style="{StaticResource PrimaryButton}" Content="开始扫描" Click="ScanButton_Click" />
+                    <Button x:Name="CancelButton" Margin="10,0,0,0" Style="{StaticResource SecondaryButton}" Content="取消" Click="CancelButton_Click" IsEnabled="False" />
+                </StackPanel>
+
+                <TextBlock Grid.Row="1" Margin="3,11,12,0" VerticalAlignment="Center" Foreground="#50627E" FontWeight="SemiBold" Text="AI 模型" />
+                <ComboBox x:Name="AiModelComboBox"
+                          Grid.Row="1"
+                          Grid.Column="1"
+                          Margin="0,11,0,0"
+                          SelectionChanged="AiModelComboBox_SelectionChanged"
+                          Style="{StaticResource AppComboBox}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button x:Name="GenerateReportButton"
+                        Grid.Row="1"
+                        Grid.Column="2"
+                        Margin="10,11,0,0"
+                        HorizontalAlignment="Stretch"
+                        Content="生成 AI 报告"
+                        Click="GenerateReportButton_Click"
+                        IsEnabled="False"
+                        Style="{StaticResource PrimaryButton}" />
             </Grid>
         </Border>
 
@@ -232,14 +272,15 @@
                           IsReadOnly="True"
                           RowHeaderWidth="0"
                           RowStyle="{StaticResource GridRow}"
-                          SelectionMode="Single"
+                          SelectionMode="Extended"
                           SelectionUnit="FullRow"
                           ContextMenuOpening="DirectoryGrid_ContextMenuOpening"
                           VirtualizingPanel.IsVirtualizing="True"
                           VirtualizingPanel.VirtualizationMode="Recycling">
                     <DataGrid.ContextMenu>
                         <ContextMenu Style="{StaticResource RowContextMenu}">
-                            <MenuItem Header="在资源管理器中显示"
+                            <MenuItem x:Name="ShowInExplorerMenuItem"
+                                      Header="在资源管理器中显示"
                                       Click="ShowInExplorerMenuItem_Click"
                                       Style="{StaticResource RowContextMenuItem}">
                                 <MenuItem.Icon>
@@ -251,8 +292,22 @@
                                     </Viewbox>
                                 </MenuItem.Icon>
                             </MenuItem>
+                            <MenuItem x:Name="AskAiMenuItem"
+                                      Header="询问 AI"
+                                      Click="AskAiMenuItem_Click"
+                                      Style="{StaticResource RowContextMenuItem}">
+                                <MenuItem.Icon>
+                                    <Viewbox Width="16" Height="16">
+                                        <Canvas Width="24" Height="24">
+                                            <Path Fill="#7B61C9"
+                                                  Data="M12,2 L13.8,8.2 20,10 13.8,11.8 12,18 10.2,11.8 4,10 10.2,8.2 Z M19,15 L19.9,18.1 23,19 19.9,19.9 19,23 18.1,19.9 15,19 18.1,18.1 Z" />
+                                        </Canvas>
+                                    </Viewbox>
+                                </MenuItem.Icon>
+                            </MenuItem>
                             <Separator Margin="5,3" Background="#E6EBF2" />
-                            <MenuItem Header="移到回收站"
+                            <MenuItem x:Name="MoveToRecycleBinMenuItem"
+                                      Header="移到回收站"
                                       Click="MoveToRecycleBinMenuItem_Click"
                                       Foreground="#C73E3E"
                                       Style="{StaticResource RowContextMenuItem}">
