@@ -9,7 +9,7 @@ public sealed class DiskScanner
 {
     private static readonly EnumerationOptions EnumerationOptions = new()
     {
-        AttributesToSkip = FileAttributes.ReparsePoint,
+        AttributesToSkip = 0,
         IgnoreInaccessible = true,
         RecurseSubdirectories = false,
         ReturnSpecialDirectories = false
@@ -43,6 +43,7 @@ public sealed class DiskScanner
             GetDisplayName(rootInfo),
             normalizedPath,
             isDirectory: true,
+            isLink: (rootInfo.Attributes & FileAttributes.ReparsePoint) != 0,
             sizeBytes: 0,
             rootInfo.LastWriteTime);
 
@@ -124,16 +125,20 @@ public sealed class DiskScanner
                             entry.Name,
                             Path.Combine(directory.FullPath, entry.Name),
                             isDirectory: true,
+                            isLink: entry.IsLink,
                             sizeBytes: 0,
                             entry.LastWriteTime);
 
                         directory.AddChild(childDirectory);
                         Interlocked.Increment(ref directoryCount);
-                        Interlocked.Increment(ref pendingDirectories);
 
-                        if (!directories.Writer.TryWrite(childDirectory))
+                        if (!entry.IsLink)
                         {
-                            Interlocked.Decrement(ref pendingDirectories);
+                            Interlocked.Increment(ref pendingDirectories);
+                            if (!directories.Writer.TryWrite(childDirectory))
+                            {
+                                Interlocked.Decrement(ref pendingDirectories);
+                            }
                         }
                     }
                     else
@@ -142,6 +147,7 @@ public sealed class DiskScanner
                             entry.Name,
                             directory.FullPath,
                             isDirectory: false,
+                            isLink: entry.IsLink,
                             entry.Length,
                             entry.LastWriteTime);
 
@@ -199,12 +205,10 @@ public sealed class DiskScanner
             static (ref FileSystemEntry entry) => new FileEntry(
                 entry.FileName.ToString(),
                 entry.IsDirectory,
+                (entry.Attributes & FileAttributes.ReparsePoint) != 0,
                 entry.IsDirectory ? 0 : entry.Length,
                 entry.LastWriteTimeUtc.LocalDateTime),
             EnumerationOptions);
-
-        entries.ShouldIncludePredicate = static (ref FileSystemEntry entry) =>
-            (entry.Attributes & FileAttributes.ReparsePoint) == 0;
 
         return entries;
     }
@@ -303,6 +307,7 @@ public sealed class DiskScanner
     private readonly record struct FileEntry(
         string Name,
         bool IsDirectory,
+        bool IsLink,
         long Length,
         DateTime LastWriteTime);
 }

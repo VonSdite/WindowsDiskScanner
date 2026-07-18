@@ -5,6 +5,10 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>WindowsDiskScanner.App</RootNamespace>
     <AssemblyName>WindowsDiskScanner</AssemblyName>
-    <ApplicationIcon />
+    <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets\app-icon.ico" />
+    <Resource Include="Assets\app-icon.png" />
+  </ItemGroup>
 </Project>

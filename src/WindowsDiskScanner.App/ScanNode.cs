@@ -10,12 +10,14 @@ public sealed class ScanNode
         string name,
         string path,
         bool isDirectory,
+        bool isLink,
         long sizeBytes,
         DateTime lastWriteTime)
     {
         Name = name;
         _path = path;
         IsDirectory = isDirectory;
+        IsLink = isLink;
         SizeBytes = sizeBytes;
         LastWriteTime = lastWriteTime;
     }
@@ -25,6 +27,8 @@ public sealed class ScanNode
     public string FullPath => IsDirectory ? _path : Path.Combine(_path, Name);
 
     public bool IsDirectory { get; }
+
+    public bool IsLink { get; }
 
     public long SizeBytes { get; internal set; }
 

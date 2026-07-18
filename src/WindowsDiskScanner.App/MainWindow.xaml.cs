@@ -1,6 +1,9 @@
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 using Microsoft.Win32;
 
 namespace WindowsDiskScanner.App;
@@ -27,8 +30,10 @@ public partial class MainWindow : Window
     private void CancelButton_Click(object sender, RoutedEventArgs e) =>
         _scanCancellation?.Cancel();
 
-    private void BrowseButton_Click(object sender, RoutedEventArgs e)
+    private void RootPathTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        e.Handled = true;
+
         OpenFolderDialog dialog = new()
         {
             Title = "选择要扫描的目录",
@@ -100,6 +105,26 @@ public partial class MainWindow : Window
             return;
         }
 
+        ToggleRow(row);
+        e.Handled = true;
+    }
+
+    private void DirectoryRow_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not DataGridRow { DataContext: TreeRow row } ||
+            !row.Node.IsDirectory ||
+            e.OriginalSource is not DependencyObject source ||
+            IsInsideButton(source))
+        {
+            return;
+        }
+
+        ToggleRow(row);
+        e.Handled = true;
+    }
+
+    private void ToggleRow(TreeRow row)
+    {
         int rowIndex = Rows.IndexOf(row);
         if (rowIndex < 0)
         {
@@ -133,7 +158,24 @@ public partial class MainWindow : Window
         }
 
         DirectoryGrid.Items.Refresh();
-        e.Handled = true;
+    }
+
+    private static bool IsInsideButton(DependencyObject source)
+    {
+        for (DependencyObject? current = source; current is not null; current = VisualTreeHelper.GetParent(current))
+        {
+            if (current is Button)
+            {
+                return true;
+            }
+
+            if (current is DataGridRow)
+            {
+                return false;
+            }
+        }
+
+        return false;
     }
 
     private void UpdateProgress(ScanProgress progress)
@@ -160,7 +202,6 @@ public partial class MainWindow : Window
     private void SetScanningState(bool isScanning)
     {
         ScanButton.IsEnabled = !isScanning;
-        BrowseButton.IsEnabled = !isScanning;
         RootPathTextBox.IsEnabled = !isScanning;
         CancelButton.IsEnabled = isScanning;
         ScanProgressBar.Visibility = isScanning ? Visibility.Visible : Visibility.Collapsed;

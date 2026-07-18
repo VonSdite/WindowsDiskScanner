@@ -7,6 +7,7 @@
         Height="760"
         MinWidth="900"
         MinHeight="600"
+        Icon="Assets/app-icon.png"
         Background="#F3F6FA"
         FontFamily="Segoe UI, Microsoft YaHei UI"
         Closing="Window_Closing">
@@ -85,6 +86,7 @@
         </Style>
 
         <Style x:Key="GridRow" TargetType="DataGridRow">
+            <EventSetter Event="MouseDoubleClick" Handler="DirectoryRow_MouseDoubleClick" />
             <Setter Property="Height" Value="38" />
             <Setter Property="Background" Value="White" />
             <Setter Property="BorderBrush" Value="#EEF2F7" />
@@ -111,19 +113,10 @@
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0" Background="#14233C" Padding="28,21">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel>
-                    <TextBlock Foreground="White" FontSize="24" FontWeight="SemiBold" Text="Windows 磁盘空间扫描器" />
-                    <TextBlock Margin="0,5,0,0" Foreground="#AFC2E2" Text="快速定位系统目录中的空间占用" />
-                </StackPanel>
-                <Border Grid.Column="1" Padding="11,7" Background="#213758" CornerRadius="18" VerticalAlignment="Center">
-                    <TextBlock Foreground="#C8D7EE" FontSize="12" Text="本地扫描 · 数据不离开设备" />
-                </Border>
-            </Grid>
+            <StackPanel>
+                <TextBlock Foreground="White" FontSize="24" FontWeight="SemiBold" Text="Windows 磁盘空间扫描器" />
+                <TextBlock Margin="0,5,0,0" Foreground="#AFC2E2" Text="快速定位系统目录中的空间占用" />
+            </StackPanel>
         </Border>
 
         <Border Grid.Row="1" Margin="24,20,24,0" Padding="14" Background="White" BorderBrush="#E3E9F1" BorderThickness="1" CornerRadius="10">
@@ -131,7 +124,6 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
@@ -144,11 +136,13 @@
                          Background="#F8FAFD"
                          BorderBrush="#DCE4EF"
                          BorderThickness="1"
+                         Cursor="Hand"
                          FontFamily="Cascadia Mono, Consolas"
-                         FontSize="13" />
-                <Button x:Name="BrowseButton" Grid.Column="2" Margin="10,0,0,0" Style="{StaticResource SecondaryButton}" Content="浏览" Click="BrowseButton_Click" />
-                <Button x:Name="ScanButton" Grid.Column="3" Margin="10,0,0,0" Style="{StaticResource PrimaryButton}" Content="开始扫描" Click="ScanButton_Click" />
-                <Button x:Name="CancelButton" Grid.Column="4" Margin="10,0,0,0" Style="{StaticResource SecondaryButton}" Content="取消" Click="CancelButton_Click" IsEnabled="False" />
+                         FontSize="13"
+                         IsReadOnly="True"
+                         PreviewMouseLeftButtonDown="RootPathTextBox_PreviewMouseLeftButtonDown" />
+                <Button x:Name="ScanButton" Grid.Column="2" Margin="10,0,0,0" Style="{StaticResource PrimaryButton}" Content="开始扫描" Click="ScanButton_Click" />
+                <Button x:Name="CancelButton" Grid.Column="3" Margin="10,0,0,0" Style="{StaticResource SecondaryButton}" Content="取消" Click="CancelButton_Click" IsEnabled="False" />
             </Grid>
         </Border>
 
@@ -219,7 +213,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="18" />
-                                            <ColumnDefinition Width="27" />
+                                            <ColumnDefinition Width="31" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <Border Width="{Binding IndentWidth}" />
@@ -237,12 +231,21 @@
                                                 FontSize="9"
                                                 Foreground="#52647D"
                                                 Visibility="{Binding HasChildren, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                        <TextBlock Grid.Column="2"
-                                                   VerticalAlignment="Center"
-                                                   FontFamily="Segoe MDL2 Assets"
-                                                   FontSize="16"
-                                                   Foreground="#E6A325"
-                                                   Text="{Binding Node.IsDirectory, Converter={StaticResource NodeIconConverter}}" />
+                                        <Grid Grid.Column="2" Width="28" Height="22" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                            <TextBlock HorizontalAlignment="Left"
+                                                       VerticalAlignment="Center"
+                                                       FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="16"
+                                                       Foreground="#E6A325"
+                                                       Text="{Binding Node.IsDirectory, Converter={StaticResource NodeIconConverter}}" />
+                                            <TextBlock HorizontalAlignment="Right"
+                                                       VerticalAlignment="Bottom"
+                                                       FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="10"
+                                                       Foreground="#2F6FED"
+                                                       Text="&#xE71B;"
+                                                       Visibility="{Binding Node.IsLink, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        </Grid>
                                         <TextBlock Grid.Column="3"
                                                    VerticalAlignment="Center"
                                                    Foreground="#1D2B45"
