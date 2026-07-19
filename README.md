@@ -66,3 +66,39 @@ dotnet run --project src/WindowsDiskScanner.App
 ```powershell
 dotnet build WindowsDiskScanner.sln -c Release
 ```
+
+## 发布
+
+项目以 Windows x64 自包含单文件形式发布。发布件包含 .NET 运行时，用户不需要单独安装 .NET。
+
+在项目根目录执行：
+
+```powershell
+$version = "0.1.0"
+$name = "WindowsDiskScanner-$version-win-x64"
+$out = "artifacts\$name"
+
+dotnet publish .\src\WindowsDiskScanner.App\WindowsDiskScanner.App.csproj `
+  -c Release `
+  -r win-x64 `
+  --self-contained true `
+  -p:PublishSingleFile=true `
+  -p:IncludeNativeLibrariesForSelfExtract=true `
+  -p:EnableCompressionInSingleFile=true `
+  -p:DebugType=None `
+  -p:DebugSymbols=false `
+  -o $out
+
+Compress-Archive `
+  -Path "$out\WindowsDiskScanner.exe" `
+  -DestinationPath "artifacts\$name.zip" `
+  -Force
+
+Get-FileHash "artifacts\$name.zip" -Algorithm SHA256
+```
+
+发布文件位于 `artifacts\WindowsDiskScanner-0.1.0-win-x64.zip`。发布新版本时更新 `$version`。
+
+用户需要先解压 ZIP，再运行 `WindowsDiskScanner.exe`。程序会在可执行文件所在目录保存 `providers.json` 和 `ai-history`，因此程序应放在用户具有写入权限的目录中。
+
+`providers.json` 包含 API Key。发布包只包含打包命令生成的 `WindowsDiskScanner.exe`，不包含开发环境中已有的 `providers.json` 和 `ai-history`。
