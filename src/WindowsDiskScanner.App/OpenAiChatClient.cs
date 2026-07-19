@@ -118,6 +118,7 @@ public sealed class OpenAiChatClient
         }
 
         string content = ParseChatContent(responseBody);
+        content = ThinkingContentParser.Parse(content).Content.Trim();
         if (content.Length == 0)
         {
             throw new InvalidOperationException("上游返回成功，但没有可用的模型输出。");
@@ -172,8 +173,27 @@ public sealed class OpenAiChatClient
         await using Stream responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using StreamReader reader = new(responseStream);
         StringBuilder fallbackBody = new();
+        ThinkingContentParser thinkingParser = new();
         bool receivedStreamEvent = false;
         bool receivedContent = false;
+
+        void PublishDelta(ChatStreamDelta delta)
+        {
+            receivedContent |= delta.Content.Length > 0;
+            if (delta.Content.Length > 0 || delta.ReasoningContent.Length > 0)
+            {
+                onDelta(delta);
+            }
+        }
+
+        void ParseAndPublishDelta(ChatStreamDelta delta)
+        {
+            ChatStreamDelta parsedContent = thinkingParser.Append(delta.Content);
+            PublishDelta(new ChatStreamDelta(
+                parsedContent.Content,
+                delta.ReasoningContent + parsedContent.ReasoningContent));
+        }
+
         while (await reader.ReadLineAsync(cancellationToken) is { } line)
         {
             if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
@@ -198,25 +218,15 @@ public sealed class OpenAiChatClient
                 break;
             }
 
-            ChatStreamDelta delta = ParseChatStreamChunk(data);
-            if (delta.Content.Length == 0 && delta.ReasoningContent.Length == 0)
-            {
-                continue;
-            }
-
-            receivedContent |= delta.Content.Length > 0;
-            onDelta(delta);
+            ParseAndPublishDelta(ParseChatStreamChunk(data));
         }
 
         if (!receivedStreamEvent)
         {
-            ChatStreamDelta delta = ParseChatStreamChunk(fallbackBody.ToString());
-            if (delta.Content.Length > 0 || delta.ReasoningContent.Length > 0)
-            {
-                receivedContent = delta.Content.Length > 0;
-                onDelta(delta);
-            }
+            ParseAndPublishDelta(ParseChatStreamChunk(fallbackBody.ToString()));
         }
+
+        PublishDelta(thinkingParser.Complete());
 
         if (!receivedContent)
         {
@@ -429,7 +439,7 @@ public sealed class OpenAiChatClient
             choices.ValueKind != JsonValueKind.Array ||
             choices.GetArrayLength() == 0)
         {
-            return default;
+            return new ChatStreamDelta(string.Empty, string.Empty);
         }
 
         JsonElement choice = choices[0];
