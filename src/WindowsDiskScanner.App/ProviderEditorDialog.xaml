@@ -55,19 +55,48 @@
                         </Grid.RowDefinitions>
 
                         <StackPanel Grid.Row="0" Grid.Column="0">
-                            <TextBlock Style="{StaticResource AppFieldLabel}" Text="Provider 名称" />
-                            <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource AppTextBox}" />
+                            <TextBlock Style="{StaticResource AppFieldLabel}">
+                                <Run Text="Provider 名称" />
+                                <Run Foreground="#D14343" Text=" *" />
+                            </TextBlock>
+                            <Grid>
+                                <TextBox x:Name="ProviderNameTextBox"
+                                         Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+                                         TextChanged="RequiredTextBox_TextChanged"
+                                         Style="{StaticResource AppTextBox}" />
+                                <TextBlock Text="例如：OpenAI"
+                                           Visibility="{Binding Text, ElementName=ProviderNameTextBox, Converter={StaticResource AppEmptyStringToVisibilityConverter}}"
+                                           Style="{StaticResource AppInputPlaceholder}" />
+                            </Grid>
                         </StackPanel>
                         <StackPanel Grid.Row="0" Grid.Column="2">
                             <TextBlock Style="{StaticResource AppFieldLabel}" Text="API Key" />
-                            <PasswordBox x:Name="ApiKeyBox" Style="{StaticResource AppPasswordBox}" />
+                            <Grid>
+                                <PasswordBox x:Name="ApiKeyBox"
+                                             PasswordChanged="ApiKeyBox_PasswordChanged"
+                                             Style="{StaticResource AppPasswordBox}" />
+                                <TextBlock x:Name="ApiKeyPlaceholder"
+                                           Text="例如：sk-...（可选）"
+                                           Style="{StaticResource AppInputPlaceholder}" />
+                            </Grid>
                         </StackPanel>
 
                         <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,15,0,0">
-                            <TextBlock Style="{StaticResource AppFieldLabel}" Text="API 地址" />
-                            <TextBox Text="{Binding ApiUrl, UpdateSourceTrigger=PropertyChanged}"
-                                     FontFamily="Cascadia Mono, Consolas"
-                                     Style="{StaticResource AppTextBox}" />
+                            <TextBlock Style="{StaticResource AppFieldLabel}">
+                                <Run Text="API 地址" />
+                                <Run Foreground="#D14343" Text=" *" />
+                            </TextBlock>
+                            <Grid>
+                                <TextBox x:Name="ApiUrlTextBox"
+                                         Text="{Binding ApiUrl, UpdateSourceTrigger=PropertyChanged}"
+                                         TextChanged="RequiredTextBox_TextChanged"
+                                         FontFamily="Cascadia Mono, Consolas"
+                                         Style="{StaticResource AppTextBox}" />
+                                <TextBlock Text="例如：https://api.openai.com/v1"
+                                           FontFamily="Cascadia Mono, Consolas"
+                                           Visibility="{Binding Text, ElementName=ApiUrlTextBox, Converter={StaticResource AppEmptyStringToVisibilityConverter}}"
+                                           Style="{StaticResource AppInputPlaceholder}" />
+                            </Grid>
                         </StackPanel>
 
                         <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,15,0,0">
@@ -84,10 +113,21 @@
                             </ComboBox>
                         </StackPanel>
                         <StackPanel x:Name="CustomProxyPanel" Grid.Row="2" Grid.Column="2" Margin="0,15,0,0">
-                            <TextBlock Style="{StaticResource AppFieldLabel}" Text="自定义代理地址" />
-                            <TextBox Text="{Binding CustomProxy, UpdateSourceTrigger=PropertyChanged}"
-                                     FontFamily="Cascadia Mono, Consolas"
-                                     Style="{StaticResource AppTextBox}" />
+                            <TextBlock Style="{StaticResource AppFieldLabel}">
+                                <Run Text="自定义代理地址" />
+                                <Run Foreground="#D14343" Text=" *" />
+                            </TextBlock>
+                            <Grid>
+                                <TextBox x:Name="CustomProxyTextBox"
+                                         Text="{Binding CustomProxy, UpdateSourceTrigger=PropertyChanged}"
+                                         TextChanged="RequiredTextBox_TextChanged"
+                                         FontFamily="Cascadia Mono, Consolas"
+                                         Style="{StaticResource AppTextBox}" />
+                                <TextBlock Text="例如：http://127.0.0.1:7890"
+                                           FontFamily="Cascadia Mono, Consolas"
+                                           Visibility="{Binding Text, ElementName=CustomProxyTextBox, Converter={StaticResource AppEmptyStringToVisibilityConverter}}"
+                                           Style="{StaticResource AppInputPlaceholder}" />
+                            </Grid>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -127,10 +167,14 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBox x:Name="NewModelTextBox"
-                                     KeyDown="NewModelTextBox_KeyDown"
-                                     Style="{StaticResource AppTextBox}"
-                                     ToolTip="输入模型名称" />
+                            <Grid>
+                                <TextBox x:Name="NewModelTextBox"
+                                         KeyDown="NewModelTextBox_KeyDown"
+                                         Style="{StaticResource AppTextBox}" />
+                                <TextBlock Text="例如：gpt-4.1-mini"
+                                           Visibility="{Binding Text, ElementName=NewModelTextBox, Converter={StaticResource AppEmptyStringToVisibilityConverter}}"
+                                           Style="{StaticResource AppInputPlaceholder}" />
+                            </Grid>
                             <Button x:Name="AddModelButton" Grid.Column="1" Margin="8,0,0,0" Content="添加模型" Click="AddModelButton_Click" Style="{StaticResource AppPrimaryButton}" />
                         </Grid>
 

@@ -1,11 +1,15 @@
 using System.Diagnostics;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 
 namespace WindowsDiskScanner.App;
+
+public readonly record struct ChatStreamDelta(string Content, string ReasoningContent);
 
 public sealed class OpenAiChatClient
 {
@@ -118,6 +122,95 @@ public sealed class OpenAiChatClient
         }
 
         return content;
+    }
+
+    public async Task SendChatStreamingAsync(
+        LlmProvider provider,
+        string model,
+        string systemPrompt,
+        string userPrompt,
+        Action<ChatStreamDelta> onDelta,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(onDelta);
+
+        Uri endpoint = BuildChatEndpoint(provider.ApiUrl);
+        using HttpClient client = CreateClient(provider, timeoutSeconds: 180);
+        using HttpRequestMessage request = CreateRequest(HttpMethod.Post, endpoint, provider.ApiKey);
+        request.Content = JsonContent.Create(new
+        {
+            model,
+            messages = new object[]
+            {
+                new { role = "system", content = systemPrompt },
+                new { role = "user", content = userPrompt }
+            },
+            stream = true
+        });
+
+        using HttpResponseMessage response = await client.SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new InvalidOperationException($"HTTP {(int)response.StatusCode}：{ExtractError(responseBody)}");
+        }
+
+        await using Stream responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using StreamReader reader = new(responseStream);
+        StringBuilder fallbackBody = new();
+        bool receivedStreamEvent = false;
+        bool receivedContent = false;
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!receivedStreamEvent)
+                {
+                    fallbackBody.AppendLine(line);
+                }
+
+                continue;
+            }
+
+            receivedStreamEvent = true;
+            string data = line[5..].Trim();
+            if (data.Length == 0)
+            {
+                continue;
+            }
+
+            if (string.Equals(data, "[DONE]", StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            ChatStreamDelta delta = ParseChatStreamChunk(data);
+            if (delta.Content.Length == 0 && delta.ReasoningContent.Length == 0)
+            {
+                continue;
+            }
+
+            receivedContent |= delta.Content.Length > 0;
+            onDelta(delta);
+        }
+
+        if (!receivedStreamEvent)
+        {
+            ChatStreamDelta delta = ParseChatStreamChunk(fallbackBody.ToString());
+            if (delta.Content.Length > 0 || delta.ReasoningContent.Length > 0)
+            {
+                receivedContent = delta.Content.Length > 0;
+                onDelta(delta);
+            }
+        }
+
+        if (!receivedContent)
+        {
+            throw new InvalidOperationException("上游未返回可用的模型输出。");
+        }
     }
 
     public static Uri BuildChatEndpoint(string apiUrl)
@@ -310,6 +403,111 @@ public sealed class OpenAiChatClient
         return choice.TryGetProperty("text", out JsonElement textElement)
             ? textElement.GetString()?.Trim() ?? string.Empty
             : string.Empty;
+    }
+
+    private static ChatStreamDelta ParseChatStreamChunk(string data)
+    {
+        using JsonDocument document = JsonDocument.Parse(data);
+        JsonElement root = document.RootElement;
+        if (root.TryGetProperty("error", out _))
+        {
+            throw new InvalidOperationException(ExtractError(data));
+        }
+
+        if (!root.TryGetProperty("choices", out JsonElement choices) ||
+            choices.ValueKind != JsonValueKind.Array ||
+            choices.GetArrayLength() == 0)
+        {
+            return default;
+        }
+
+        JsonElement choice = choices[0];
+        JsonElement payload = choice.TryGetProperty("delta", out JsonElement delta)
+            ? delta
+            : choice.TryGetProperty("message", out JsonElement message)
+                ? message
+                : choice;
+        string content = payload.TryGetProperty("content", out JsonElement contentElement)
+            ? ParseStreamingContent(contentElement)
+            : choice.TryGetProperty("text", out JsonElement textElement) && textElement.ValueKind == JsonValueKind.String
+                ? textElement.GetString() ?? string.Empty
+                : string.Empty;
+        string reasoningContent = ParseReasoningContent(payload);
+        if (reasoningContent.Length == 0)
+        {
+            reasoningContent = ParseReasoningContent(choice);
+        }
+
+        return new ChatStreamDelta(content, reasoningContent);
+    }
+
+    private static string ParseStreamingContent(JsonElement content)
+    {
+        if (content.ValueKind == JsonValueKind.String)
+        {
+            return content.GetString() ?? string.Empty;
+        }
+
+        if (content.ValueKind != JsonValueKind.Array)
+        {
+            return string.Empty;
+        }
+
+        return string.Concat(
+            content.EnumerateArray()
+                .Where(part => part.ValueKind == JsonValueKind.Object && part.TryGetProperty("text", out _))
+                .Select(part => part.GetProperty("text").GetString()));
+    }
+
+    private static string ParseReasoningContent(JsonElement element)
+    {
+        string[] propertyNames = ["reasoning_content", "reasoning", "thinking", "analysis", "reasoning_details"];
+        foreach (string propertyName in propertyNames)
+        {
+            if (element.TryGetProperty(propertyName, out JsonElement value))
+            {
+                string content = ParseReasoningValue(value);
+                if (content.Length > 0)
+                {
+                    return content;
+                }
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string ParseReasoningValue(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.String)
+        {
+            return value.GetString() ?? string.Empty;
+        }
+
+        if (value.ValueKind == JsonValueKind.Array)
+        {
+            return string.Concat(value.EnumerateArray().Select(ParseReasoningValue));
+        }
+
+        if (value.ValueKind != JsonValueKind.Object)
+        {
+            return string.Empty;
+        }
+
+        string[] propertyNames = ["text", "content", "reasoning_content", "reasoning", "thinking"];
+        foreach (string propertyName in propertyNames)
+        {
+            if (value.TryGetProperty(propertyName, out JsonElement nestedValue))
+            {
+                string content = ParseReasoningValue(nestedValue);
+                if (content.Length > 0)
+                {
+                    return content;
+                }
+            }
+        }
+
+        return string.Empty;
     }
 
     private static string ExtractError(string responseBody)

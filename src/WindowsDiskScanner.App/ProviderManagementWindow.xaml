@@ -26,7 +26,7 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock Foreground="White" FontSize="21" FontWeight="SemiBold" Text="LLM Provider" />
-                    <TextBlock Margin="0,4,0,0" Foreground="#AFC2E2" Text="管理 OpenAI Chat 兼容接口和模型顺序" />
+                    <TextBlock Margin="0,4,0,0" Foreground="#AFC2E2" Text="管理 OpenAI Chat 兼容接口" />
                 </StackPanel>
                 <Button Grid.Column="1"
                         Content="新增 Provider"
@@ -44,6 +44,7 @@
                      PreviewMouseLeftButtonDown="ProvidersList_PreviewMouseLeftButtonDown"
                      PreviewMouseMove="ProvidersList_PreviewMouseMove"
                      DragOver="ProvidersList_DragOver"
+                     DragLeave="ProvidersList_DragLeave"
                      Drop="ProvidersList_Drop"
                      MouseDoubleClick="ProvidersList_MouseDoubleClick">
                 <ListBox.ItemContainerStyle>

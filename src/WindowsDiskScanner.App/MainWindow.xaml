@@ -134,13 +134,16 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock Foreground="White" FontSize="24" FontWeight="SemiBold" Text="Windows 磁盘空间扫描器" />
-                    <TextBlock Margin="0,5,0,0" Foreground="#AFC2E2" Text="快速定位系统目录中的空间占用" />
                 </StackPanel>
-                <Button Grid.Column="1"
-                        VerticalAlignment="Center"
-                        Content="Provider 管理"
-                        Click="ProviderManagementButton_Click"
-                        Style="{StaticResource PrimaryButton}" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Orientation="Horizontal">
+                    <Button Content="AI 历史"
+                            Click="AiHistoryButton_Click"
+                            Style="{StaticResource SecondaryButton}" />
+                    <Button Margin="10,0,0,0"
+                            Content="Provider 管理"
+                            Click="ProviderManagementButton_Click"
+                            Style="{StaticResource PrimaryButton}" />
+                </StackPanel>
             </Grid>
         </Border>
 

@@ -11,4 +11,7 @@
     <Resource Include="Assets\app-icon.ico" />
     <Resource Include="Assets\app-icon.png" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="MdXaml" Version="1.27.0" />
+  </ItemGroup>
 </Project>

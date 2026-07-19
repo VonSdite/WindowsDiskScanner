@@ -8,6 +8,7 @@ namespace WindowsDiskScanner.App;
 
 public partial class ProviderEditorDialog : UserControl
 {
+    private static readonly Brush InvalidFieldBorderBrush = new SolidColorBrush(Color.FromRgb(209, 67, 67));
     private readonly ProviderStore _store;
     private readonly OpenAiChatClient _client;
     private readonly bool _isNew;
@@ -56,7 +57,22 @@ public partial class ProviderEditorDialog : UserControl
             ? selectedMode
             : ProviderProxyMode.Direct;
         CustomProxyPanel.Visibility = mode == ProviderProxyMode.Custom ? Visibility.Visible : Visibility.Collapsed;
+        if (mode != ProviderProxyMode.Custom)
+        {
+            ClearInvalidField(CustomProxyTextBox);
+        }
     }
+
+    private void RequiredTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (sender is TextBox textBox)
+        {
+            ClearInvalidField(textBox);
+        }
+    }
+
+    private void ApiKeyBox_PasswordChanged(object sender, RoutedEventArgs e) =>
+        ApiKeyPlaceholder.Visibility = ApiKeyBox.Password.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
 
     private void AddModelButton_Click(object sender, RoutedEventArgs e) =>
         AddModelFromInput();
@@ -238,8 +254,13 @@ public partial class ProviderEditorDialog : UserControl
             return;
         }
 
-        ReadForm();
+        LlmProvider provider = ReadForm();
         NormalizeModels();
+        if (!ValidateSaveFields(provider))
+        {
+            return;
+        }
+
         try
         {
             if (_isNew)
@@ -255,7 +276,7 @@ public partial class ProviderEditorDialog : UserControl
         }
         catch (Exception exception)
         {
-            MessageBox.Show(Window.GetWindow(this), exception.Message, "无法保存 Provider", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowSaveError(exception.Message);
         }
     }
 
@@ -283,21 +304,109 @@ public partial class ProviderEditorDialog : UserControl
 
     private bool ValidateNetworkFields(LlmProvider provider)
     {
+        ClearInvalidField(ApiUrlTextBox);
+        ClearInvalidField(CustomProxyTextBox);
         if (!Uri.TryCreate(provider.ApiUrl.Trim(), UriKind.Absolute, out Uri? apiUri) ||
             apiUri.Scheme is not ("http" or "https"))
         {
+            MarkInvalidField(ApiUrlTextBox);
             StatusText.Text = "请填写有效的 HTTP 或 HTTPS API 地址。";
+            ApiUrlTextBox.Focus();
             return false;
         }
 
         if (provider.ProxyMode == ProviderProxyMode.Custom &&
-            !Uri.TryCreate(provider.CustomProxy.Trim(), UriKind.Absolute, out _))
+            (!Uri.TryCreate(provider.CustomProxy.Trim(), UriKind.Absolute, out Uri? proxyUri) ||
+             proxyUri.Scheme is not ("http" or "https" or "socks5")))
         {
+            MarkInvalidField(CustomProxyTextBox);
             StatusText.Text = "请填写有效的自定义代理地址。";
+            CustomProxyTextBox.Focus();
             return false;
         }
 
         return true;
+    }
+
+    private bool ValidateSaveFields(LlmProvider provider)
+    {
+        ClearInvalidField(ProviderNameTextBox);
+        ClearInvalidField(ApiUrlTextBox);
+        ClearInvalidField(CustomProxyTextBox);
+
+        Control? firstInvalidField = null;
+        string? firstError = null;
+        string name = provider.Name.Trim();
+        if (name.Length == 0)
+        {
+            MarkInvalidField(ProviderNameTextBox);
+            firstInvalidField = ProviderNameTextBox;
+            firstError = "请填写 Provider 名称。";
+        }
+        else if (name.Length > 64)
+        {
+            MarkInvalidField(ProviderNameTextBox);
+            firstInvalidField = ProviderNameTextBox;
+            firstError = "Provider 名称不能超过 64 个字符。";
+        }
+
+        if (!Uri.TryCreate(provider.ApiUrl.Trim(), UriKind.Absolute, out Uri? apiUri) ||
+            apiUri.Scheme is not ("http" or "https"))
+        {
+            MarkInvalidField(ApiUrlTextBox);
+            firstInvalidField ??= ApiUrlTextBox;
+            firstError ??= "请填写有效的 HTTP 或 HTTPS API 地址。";
+        }
+
+        if (provider.ProxyMode == ProviderProxyMode.Custom &&
+            (!Uri.TryCreate(provider.CustomProxy.Trim(), UriKind.Absolute, out Uri? proxyUri) ||
+             proxyUri.Scheme is not ("http" or "https" or "socks5")))
+        {
+            MarkInvalidField(CustomProxyTextBox);
+            firstInvalidField ??= CustomProxyTextBox;
+            firstError ??= "请填写有效的自定义代理地址。";
+        }
+
+        if (firstInvalidField is null)
+        {
+            return true;
+        }
+
+        StatusText.Text = firstError;
+        firstInvalidField.Focus();
+        return false;
+    }
+
+    private void ShowSaveError(string message)
+    {
+        StatusText.Text = message;
+        if (message.StartsWith("Provider 名称", StringComparison.Ordinal))
+        {
+            MarkInvalidField(ProviderNameTextBox);
+            ProviderNameTextBox.Focus();
+        }
+        else if (message.StartsWith("API 地址", StringComparison.Ordinal))
+        {
+            MarkInvalidField(ApiUrlTextBox);
+            ApiUrlTextBox.Focus();
+        }
+        else if (message.StartsWith("自定义代理", StringComparison.Ordinal))
+        {
+            MarkInvalidField(CustomProxyTextBox);
+            CustomProxyTextBox.Focus();
+        }
+    }
+
+    private static void MarkInvalidField(Control field)
+    {
+        field.BorderBrush = InvalidFieldBorderBrush;
+        field.BorderThickness = new Thickness(1.5);
+    }
+
+    private static void ClearInvalidField(Control field)
+    {
+        field.ClearValue(Control.BorderBrushProperty);
+        field.ClearValue(Control.BorderThicknessProperty);
     }
 
     private void NormalizeModels()
@@ -517,27 +626,4 @@ public partial class ProviderEditorDialog : UserControl
     }
 
     private sealed record ProxyModeOption(ProviderProxyMode Mode, string DisplayName);
-
-    private sealed class DropInsertionAdorner : Adorner
-    {
-        private readonly bool _insertAfter;
-
-        public DropInsertionAdorner(UIElement adornedElement, bool insertAfter)
-            : base(adornedElement)
-        {
-            _insertAfter = insertAfter;
-            IsHitTestVisible = false;
-        }
-
-        protected override void OnRender(DrawingContext drawingContext)
-        {
-            SolidColorBrush brush = new(Color.FromRgb(47, 111, 237));
-            Pen pen = new(brush, 2);
-            double y = _insertAfter ? Math.Max(1, AdornedElement.RenderSize.Height - 1) : 1;
-            double width = AdornedElement.RenderSize.Width;
-            drawingContext.DrawLine(pen, new Point(0, y), new Point(width, y));
-            drawingContext.DrawEllipse(brush, null, new Point(2, y), 2, 2);
-            drawingContext.DrawEllipse(brush, null, new Point(Math.Max(2, width - 2), y), 2, 2);
-        }
-    }
 }

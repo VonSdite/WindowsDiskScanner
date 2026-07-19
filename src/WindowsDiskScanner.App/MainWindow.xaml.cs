@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -14,6 +15,7 @@ public partial class MainWindow : Window
 {
     private readonly DiskScanner _scanner = new();
     private readonly ByteSizeConverter _byteSizeConverter = new();
+    private readonly AiHistoryStore _aiHistoryStore;
     private readonly ProviderStore _providerStore;
     private readonly OpenAiChatClient _openAiChatClient;
     private CancellationTokenSource? _scanCancellation;
@@ -21,11 +23,13 @@ public partial class MainWindow : Window
     private ScanResult? _currentResult;
     private bool _aiOperationInProgress;
     private bool _fileOperationInProgress;
+    private AiHistoryWindow? _aiHistoryWindow;
 
     public MainWindow()
     {
         InitializeComponent();
         App app = (App)Application.Current;
+        _aiHistoryStore = app.AiHistoryStore;
         _providerStore = app.ProviderStore;
         _openAiChatClient = app.OpenAiChatClient;
         Rows = [];
@@ -51,6 +55,20 @@ public partial class MainWindow : Window
         };
         window.ShowDialog();
         RefreshAiModelOptions();
+    }
+
+    private void AiHistoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_aiHistoryWindow is { IsVisible: true })
+        {
+            _aiHistoryWindow.Activate();
+            return;
+        }
+
+        AiHistoryWindow window = new(_aiHistoryStore);
+        _aiHistoryWindow = window;
+        window.Closed += (_, _) => _aiHistoryWindow = null;
+        window.Show();
     }
 
     private void ProviderStore_Changed(object? sender, EventArgs e)
@@ -89,7 +107,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        await RunAiRequestAsync("AI 磁盘分析报告", option, AiPromptBuilder.BuildScanReport(_currentResult));
+        await RunAiRequestAsync(
+            "AI 磁盘分析报告",
+            $"磁盘分析报告 · {_currentResult.Root.FullPath}",
+            AiHistoryKind.Report,
+            option,
+            AiPromptBuilder.BuildScanReport(_currentResult));
     }
 
     private void RootPathTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -260,7 +283,15 @@ public partial class MainWindow : Window
             return;
         }
 
-        await RunAiRequestAsync("AI 文件解释", option, AiPromptBuilder.BuildNodeExplanation(selectedRows));
+        string subject = selectedRows.Count == 1
+            ? selectedRows[0].Node.FullPath
+            : $"{selectedRows.Count} 个项目 · {selectedRows[0].Node.Name}";
+        await RunAiRequestAsync(
+            "AI 文件解释",
+            $"文件解释 · {subject}",
+            AiHistoryKind.Inquiry,
+            option,
+            AiPromptBuilder.BuildNodeExplanation(selectedRows));
     }
 
     private async void MoveToRecycleBinMenuItem_Click(object sender, RoutedEventArgs e)
@@ -433,7 +464,12 @@ public partial class MainWindow : Window
         return result;
     }
 
-    private async Task RunAiRequestAsync(string title, AiModelOption option, AiPrompt prompt)
+    private async Task RunAiRequestAsync(
+        string title,
+        string historyTitle,
+        AiHistoryKind historyKind,
+        AiModelOption option,
+        AiPrompt prompt)
     {
         if (_aiOperationInProgress)
         {
@@ -441,24 +477,60 @@ public partial class MainWindow : Window
         }
 
         _aiOperationInProgress = true;
-        _aiCancellation = new CancellationTokenSource();
+        CancellationTokenSource requestCancellation = new();
+        _aiCancellation = requestCancellation;
+        DateTimeOffset createdAt = DateTimeOffset.Now;
+        StringBuilder streamedContent = new();
+        StringBuilder streamedReasoning = new();
         UpdateAiActionState();
         StatusText.Text = $"正在调用 AI：{option.DisplayName}";
+        AiResultWindow resultWindow = new(title, option.DisplayName);
+        EventHandler cancelOnClose = (_, _) => requestCancellation.Cancel();
+        resultWindow.Closed += cancelOnClose;
+        resultWindow.Show();
         try
         {
             LlmProvider providerSnapshot = option.Provider.Clone();
-            string content = await _openAiChatClient.SendChatAsync(
+            await _openAiChatClient.SendChatStreamingAsync(
                 providerSnapshot,
                 option.Model.Name,
                 prompt.SystemPrompt,
                 prompt.UserPrompt,
-                _aiCancellation.Token);
-            AiResultWindow resultWindow = new(title, option.DisplayName, content)
+                delta =>
+                {
+                    if (delta.ReasoningContent.Length > 0)
+                    {
+                        streamedReasoning.Append(delta.ReasoningContent);
+                        resultWindow.AppendReasoning(delta.ReasoningContent);
+                    }
+
+                    if (delta.Content.Length > 0)
+                    {
+                        streamedContent.Append(delta.Content);
+                        resultWindow.AppendContent(delta.Content);
+                    }
+                },
+                requestCancellation.Token);
+            if (resultWindow.IsVisible)
             {
-                Owner = this
-            };
-            resultWindow.Show();
-            StatusText.Text = $"AI 分析完成：{option.DisplayName}";
+                resultWindow.MarkCompleted();
+            }
+
+            try
+            {
+                _aiHistoryStore.Add(
+                    historyKind,
+                    historyTitle,
+                    option.DisplayName,
+                    createdAt,
+                    streamedContent.ToString(),
+                    streamedReasoning.ToString());
+                StatusText.Text = $"AI 分析完成：{option.DisplayName}";
+            }
+            catch (Exception)
+            {
+                StatusText.Text = "AI 分析完成，历史保存失败";
+            }
         }
         catch (OperationCanceledException)
         {
@@ -467,12 +539,20 @@ public partial class MainWindow : Window
         catch (Exception exception)
         {
             StatusText.Text = "AI 请求失败";
-            MessageBox.Show(this, exception.Message, "AI 请求失败", MessageBoxButton.OK, MessageBoxImage.Error);
+            if (resultWindow.IsVisible)
+            {
+                resultWindow.ShowError(exception.Message);
+            }
         }
         finally
         {
-            _aiCancellation.Dispose();
-            _aiCancellation = null;
+            resultWindow.Closed -= cancelOnClose;
+            if (ReferenceEquals(_aiCancellation, requestCancellation))
+            {
+                _aiCancellation = null;
+            }
+
+            requestCancellation.Dispose();
             _aiOperationInProgress = false;
             UpdateAiActionState();
         }

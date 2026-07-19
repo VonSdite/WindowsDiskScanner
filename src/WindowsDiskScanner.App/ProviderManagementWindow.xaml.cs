@@ -1,6 +1,7 @@
 using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -12,6 +13,11 @@ public partial class ProviderManagementWindow : Window
     private readonly OpenAiChatClient _client;
     private Point _dragStartPoint;
     private LlmProvider? _draggedProvider;
+    private ListBoxItem? _draggedProviderContainer;
+    private ListBoxItem? _dropTargetContainer;
+    private AdornerLayer? _dropAdornerLayer;
+    private DropInsertionAdorner? _dropInsertionAdorner;
+    private bool _dropAfterTarget;
     private ProviderEditorDialog? _editor;
 
     public ProviderManagementWindow(ProviderStore store, OpenAiChatClient client)
@@ -108,7 +114,8 @@ public partial class ProviderManagementWindow : Window
     private void ProvidersList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         _dragStartPoint = e.GetPosition(ProvidersList);
-        _draggedProvider = FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject)?.DataContext as LlmProvider;
+        _draggedProviderContainer = FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject);
+        _draggedProvider = _draggedProviderContainer?.DataContext as LlmProvider;
     }
 
     private void ProvidersList_PreviewMouseMove(object sender, MouseEventArgs e)
@@ -127,40 +134,153 @@ public partial class ProviderManagementWindow : Window
             return;
         }
 
-        DragDrop.DoDragDrop(ProvidersList, _draggedProvider, DragDropEffects.Move);
+        try
+        {
+            _draggedProviderContainer?.SetCurrentValue(UIElement.OpacityProperty, 0.55);
+            DragDrop.DoDragDrop(ProvidersList, _draggedProvider, DragDropEffects.Move);
+        }
+        finally
+        {
+            _draggedProviderContainer?.ClearValue(UIElement.OpacityProperty);
+            _draggedProviderContainer = null;
+            _draggedProvider = null;
+            ClearDropPreview();
+        }
     }
 
-    private void ProvidersList_DragOver(object sender, DragEventArgs e) =>
-        e.Effects = e.Data.GetDataPresent(typeof(LlmProvider)) ? DragDropEffects.Move : DragDropEffects.None;
+    private void ProvidersList_DragOver(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(typeof(LlmProvider)))
+        {
+            e.Effects = DragDropEffects.None;
+            ClearDropPreview();
+            return;
+        }
+
+        e.Effects = DragDropEffects.Move;
+        ListBoxItem? targetContainer = ResolveDropTarget(e, out bool insertAfter);
+        if (targetContainer is null)
+        {
+            ClearDropPreview();
+        }
+        else
+        {
+            ShowDropPreview(targetContainer, insertAfter);
+        }
+
+        e.Handled = true;
+    }
+
+    private void ProvidersList_DragLeave(object sender, DragEventArgs e)
+    {
+        Point position = e.GetPosition(ProvidersList);
+        if (position.X < 0 || position.Y < 0 || position.X > ProvidersList.ActualWidth || position.Y > ProvidersList.ActualHeight)
+        {
+            ClearDropPreview();
+        }
+    }
 
     private void ProvidersList_Drop(object sender, DragEventArgs e)
     {
-        if (e.Data.GetData(typeof(LlmProvider)) is not LlmProvider draggedProvider)
+        try
         {
-            return;
-        }
+            if (e.Data.GetData(typeof(LlmProvider)) is not LlmProvider draggedProvider)
+            {
+                return;
+            }
 
+            ListBoxItem? targetContainer = _dropTargetContainer ?? ResolveDropTarget(e, out _dropAfterTarget);
+            if (targetContainer?.DataContext is not LlmProvider targetProvider)
+            {
+                return;
+            }
+
+            int oldIndex = _store.Providers.IndexOf(draggedProvider);
+            int targetIndex = _store.Providers.IndexOf(targetProvider);
+            if (_dropAfterTarget)
+            {
+                targetIndex++;
+            }
+
+            if (oldIndex < targetIndex)
+            {
+                targetIndex--;
+            }
+
+            targetIndex = Math.Clamp(targetIndex, 0, _store.Providers.Count - 1);
+            if (oldIndex != targetIndex)
+            {
+                _store.Move(oldIndex, targetIndex);
+                StatusText.Text = "Provider 顺序已保存。";
+            }
+        }
+        finally
+        {
+            ClearDropPreview();
+        }
+    }
+
+    private ListBoxItem? ResolveDropTarget(DragEventArgs e, out bool insertAfter)
+    {
         ListBoxItem? targetContainer = FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject);
-        if (targetContainer?.DataContext is not LlmProvider targetProvider || targetProvider.Id == draggedProvider.Id)
+        if (targetContainer is not null)
+        {
+            insertAfter = e.GetPosition(targetContainer).Y > targetContainer.ActualHeight / 2;
+            return targetContainer;
+        }
+
+        insertAfter = false;
+        if (ProvidersList.Items.Count == 0)
+        {
+            return null;
+        }
+
+        ListBoxItem? firstContainer = ProvidersList.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem;
+        if (firstContainer is not null)
+        {
+            double firstTop = firstContainer.TranslatePoint(new Point(), ProvidersList).Y;
+            if (e.GetPosition(ProvidersList).Y < firstTop)
+            {
+                return firstContainer;
+            }
+        }
+
+        insertAfter = true;
+        return ProvidersList.ItemContainerGenerator.ContainerFromIndex(ProvidersList.Items.Count - 1) as ListBoxItem;
+    }
+
+    private void ShowDropPreview(ListBoxItem targetContainer, bool insertAfter)
+    {
+        if (ReferenceEquals(_dropTargetContainer, targetContainer) && _dropAfterTarget == insertAfter)
         {
             return;
         }
 
-        int oldIndex = _store.Providers.IndexOf(draggedProvider);
-        int targetIndex = _store.Providers.IndexOf(targetProvider);
-        if (e.GetPosition(targetContainer).Y > targetContainer.ActualHeight / 2)
+        ClearDropPreview();
+        AdornerLayer? adornerLayer = AdornerLayer.GetAdornerLayer(targetContainer);
+        if (adornerLayer is null)
         {
-            targetIndex++;
+            return;
         }
 
-        if (oldIndex < targetIndex)
+        _dropTargetContainer = targetContainer;
+        _dropAfterTarget = insertAfter;
+        _dropAdornerLayer = adornerLayer;
+        _dropInsertionAdorner = new DropInsertionAdorner(targetContainer, insertAfter);
+        adornerLayer.Add(_dropInsertionAdorner);
+    }
+
+    private void ClearDropPreview()
+    {
+        if (_dropAdornerLayer is not null && _dropInsertionAdorner is not null)
         {
-            targetIndex--;
+            _dropAdornerLayer.Remove(_dropInsertionAdorner);
         }
 
-        targetIndex = Math.Clamp(targetIndex, 0, _store.Providers.Count - 1);
-        _store.Move(oldIndex, targetIndex);
-        StatusText.Text = "Provider 顺序已保存。";
+        _dropTargetContainer = null;
+        _dropAdornerLayer = null;
+        _dropInsertionAdorner = null;
+        _dropAfterTarget = false;
     }
 
     private void UpdateEmptyState() =>
