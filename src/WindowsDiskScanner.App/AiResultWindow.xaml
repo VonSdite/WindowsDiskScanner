@@ -16,6 +16,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0" Padding="24,17" Background="#14233C">
@@ -78,7 +79,49 @@
             </Border>
         </Grid>
 
-        <Border Grid.Row="2" Padding="20,14" Background="White" BorderBrush="#E1E7EF" BorderThickness="0,1,0,0">
+        <Border x:Name="FollowUpPanel"
+                Grid.Row="2"
+                Padding="20,12"
+                Background="White"
+                BorderBrush="#E1E7EF"
+                BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid>
+                    <TextBox x:Name="FollowUpTextBox"
+                             MinHeight="40"
+                             MaxHeight="88"
+                             AcceptsReturn="True"
+                             IsEnabled="False"
+                             KeyDown="FollowUpTextBox_KeyDown"
+                             TextWrapping="Wrap"
+                             VerticalContentAlignment="Top"
+                             VerticalScrollBarVisibility="Auto"
+                             Style="{StaticResource AppTextBox}" />
+                    <TextBlock x:Name="FollowUpPlaceholder"
+                               Margin="11,0"
+                               VerticalAlignment="Center"
+                               Foreground="#9AA6B8"
+                               IsHitTestVisible="False"
+                               Text="当前回答完成后可继续追问"
+                               TextTrimming="CharacterEllipsis"
+                               Visibility="{Binding Text, ElementName=FollowUpTextBox, Converter={StaticResource AppEmptyStringToVisibilityConverter}}" />
+                </Grid>
+                <Button x:Name="FollowUpButton"
+                        Grid.Column="1"
+                        MinWidth="76"
+                        Margin="10,0,0,0"
+                        Content="追问"
+                        Click="FollowUpButton_Click"
+                        IsEnabled="False"
+                        Style="{StaticResource AppPrimaryButton}" />
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="3" Padding="20,14" Background="White" BorderBrush="#E1E7EF" BorderThickness="0,1,0,0">
             <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
                 <Button x:Name="CopyButton" Margin="0,0,10,0" Content="复制内容" Click="CopyButton_Click" IsEnabled="False" Style="{StaticResource AppButton}" />
                 <Button Content="关闭" IsCancel="True" Click="CloseButton_Click" Style="{StaticResource AppPrimaryButton}" />

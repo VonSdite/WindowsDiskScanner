@@ -482,15 +482,32 @@ public partial class MainWindow : Window
         DateTimeOffset createdAt = DateTimeOffset.Now;
         StringBuilder streamedContent = new();
         StringBuilder streamedReasoning = new();
+        LlmProvider providerSnapshot = option.Provider.Clone();
+        List<ChatMessage> conversation =
+        [
+            new ChatMessage("system", prompt.SystemPrompt),
+            new ChatMessage("user", prompt.UserPrompt)
+        ];
+        AiHistoryRecord? historyRecord = null;
         UpdateAiActionState();
         StatusText.Text = $"正在调用 AI：{option.DisplayName}";
         AiResultWindow resultWindow = new(title, option.DisplayName);
+        async void FollowUpRequested(object? sender, FollowUpRequestedEventArgs e) =>
+            await RunAiFollowUpAsync(
+                resultWindow,
+                providerSnapshot,
+                option.Model.Name,
+                option.DisplayName,
+                conversation,
+                historyRecord,
+                e.Question);
+        resultWindow.FollowUpRequested += FollowUpRequested;
+        resultWindow.Closed += (_, _) => resultWindow.FollowUpRequested -= FollowUpRequested;
         EventHandler cancelOnClose = (_, _) => requestCancellation.Cancel();
         resultWindow.Closed += cancelOnClose;
         resultWindow.Show();
         try
         {
-            LlmProvider providerSnapshot = option.Provider.Clone();
             await _openAiChatClient.SendChatStreamingAsync(
                 providerSnapshot,
                 option.Model.Name,
@@ -511,6 +528,7 @@ public partial class MainWindow : Window
                     }
                 },
                 requestCancellation.Token);
+            conversation.Add(new ChatMessage("assistant", streamedContent.ToString()));
             if (resultWindow.IsVisible)
             {
                 resultWindow.MarkCompleted();
@@ -518,7 +536,7 @@ public partial class MainWindow : Window
 
             try
             {
-                _aiHistoryStore.Add(
+                historyRecord = _aiHistoryStore.Add(
                     historyKind,
                     historyTitle,
                     option.DisplayName,
@@ -555,6 +573,119 @@ public partial class MainWindow : Window
             requestCancellation.Dispose();
             _aiOperationInProgress = false;
             UpdateAiActionState();
+        }
+    }
+
+    private async Task RunAiFollowUpAsync(
+        AiResultWindow resultWindow,
+        LlmProvider provider,
+        string modelName,
+        string modelDisplayName,
+        List<ChatMessage> conversation,
+        AiHistoryRecord? historyRecord,
+        string question)
+    {
+        if (_aiOperationInProgress || !resultWindow.IsVisible)
+        {
+            resultWindow.SetFollowUpBusy(false);
+            return;
+        }
+
+        _aiOperationInProgress = true;
+        CancellationTokenSource requestCancellation = new();
+        _aiCancellation = requestCancellation;
+        ChatMessage userMessage = new("user", question);
+        conversation.Add(userMessage);
+        StringBuilder answer = new();
+        EventHandler cancelOnClose = (_, _) => requestCancellation.Cancel();
+        resultWindow.Closed += cancelOnClose;
+        resultWindow.BeginFollowUp(question);
+        UpdateAiActionState();
+        StatusText.Text = $"正在追问 AI：{modelDisplayName}";
+        try
+        {
+            await _openAiChatClient.SendChatStreamingAsync(
+                provider,
+                modelName,
+                conversation,
+                delta =>
+                {
+                    if (delta.ReasoningContent.Length > 0)
+                    {
+                        resultWindow.AppendReasoning(delta.ReasoningContent);
+                    }
+
+                    if (delta.Content.Length > 0)
+                    {
+                        answer.Append(delta.Content);
+                        resultWindow.AppendContent(delta.Content);
+                    }
+                },
+                requestCancellation.Token);
+
+            conversation.Add(new ChatMessage("assistant", answer.ToString()));
+            if (resultWindow.IsVisible)
+            {
+                resultWindow.MarkCompleted();
+            }
+
+            if (historyRecord is not null)
+            {
+                try
+                {
+                    _aiHistoryStore.UpdateContent(historyRecord, resultWindow.ResultContent, resultWindow.ReasoningContent);
+                }
+                catch (Exception)
+                {
+                    StatusText.Text = "AI 追问完成，历史更新失败";
+                    return;
+                }
+            }
+
+            StatusText.Text = $"AI 追问完成：{modelDisplayName}";
+        }
+        catch (OperationCanceledException)
+        {
+            RemovePendingUserMessage(conversation, userMessage);
+            StatusText.Text = "AI 追问已取消";
+            if (resultWindow.IsVisible)
+            {
+                resultWindow.MarkFollowUpCancelled();
+            }
+        }
+        catch (Exception exception)
+        {
+            RemovePendingUserMessage(conversation, userMessage);
+            StatusText.Text = "AI 追问失败";
+            if (resultWindow.IsVisible)
+            {
+                resultWindow.ShowFollowUpError(exception.Message);
+            }
+        }
+        finally
+        {
+            resultWindow.Closed -= cancelOnClose;
+            if (ReferenceEquals(_aiCancellation, requestCancellation))
+            {
+                _aiCancellation = null;
+            }
+
+            requestCancellation.Dispose();
+            _aiOperationInProgress = false;
+            if (resultWindow.IsVisible)
+            {
+                resultWindow.SetFollowUpBusy(false);
+            }
+
+            UpdateAiActionState();
+        }
+    }
+
+    private static void RemovePendingUserMessage(List<ChatMessage> conversation, ChatMessage userMessage)
+    {
+        if (conversation.Count > 0 && ReferenceEquals(conversation[^1], userMessage))
+        {
+            conversation.RemoveAt(conversation.Count - 1);
         }
     }
 

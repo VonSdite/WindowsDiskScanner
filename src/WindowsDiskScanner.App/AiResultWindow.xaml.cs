@@ -25,6 +25,12 @@ public partial class AiResultWindow : Window
     private readonly DispatcherTimer _renderTimer;
     private bool _isCompleted;
 
+    public event EventHandler<FollowUpRequestedEventArgs>? FollowUpRequested;
+
+    public string ResultContent => _content.ToString();
+
+    public string ReasoningContent => _reasoning.ToString();
+
     public AiResultWindow(string title, string modelName)
     {
         InitializeComponent();
@@ -82,6 +88,7 @@ public partial class AiResultWindow : Window
         _isCompleted = true;
         RenderOutput();
         ModelText.Text = $"模型：{_modelName} · 已完成";
+        SetFollowUpBusy(false);
     });
 
     public void ShowCompletedContent(string content, string reasoningContent = "") => RunOnUiThread(() =>
@@ -91,6 +98,7 @@ public partial class AiResultWindow : Window
         _reasoning.Clear();
         _reasoning.Append(reasoningContent);
         _isCompleted = true;
+        FollowUpPanel.Visibility = Visibility.Collapsed;
         ReasoningExpander.Visibility = reasoningContent.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         CopyButton.IsEnabled = content.Length > 0;
         RenderOutput(scrollToEnd: false);
@@ -111,6 +119,44 @@ public partial class AiResultWindow : Window
             RenderOutput();
             ModelText.Text = $"模型：{_modelName} · 请求失败";
         });
+
+    public void BeginFollowUp(string question) => RunOnUiThread(() =>
+    {
+        _isCompleted = false;
+        _content.AppendLine().AppendLine("---").AppendLine().AppendLine("## 追问").AppendLine();
+        foreach (string line in question.ReplaceLineEndings("\n").Split('\n'))
+        {
+            _content.Append("> ").AppendLine(line);
+        }
+
+        _content.AppendLine().AppendLine("## 回答").AppendLine();
+        if (_reasoning.Length > 0)
+        {
+            _reasoning.AppendLine().AppendLine("---").AppendLine().AppendLine("### 追问思考").AppendLine();
+        }
+
+        FindDescendant<ScrollViewer>(ContentViewer)?.ScrollToEnd();
+        RenderOutput();
+        ModelText.Text = $"模型：{_modelName} · 正在追问…";
+    });
+
+    public void ShowFollowUpError(string message) => RunOnUiThread(() =>
+    {
+        _content.Append("> **追问失败：** ").AppendLine(message);
+        _isCompleted = true;
+        RenderOutput();
+        ModelText.Text = $"模型：{_modelName} · 追问失败";
+        SetFollowUpBusy(false);
+    });
+
+    public void MarkFollowUpCancelled() => RunOnUiThread(() =>
+    {
+        _content.AppendLine("> *追问已取消。*");
+        _isCompleted = true;
+        RenderOutput();
+        ModelText.Text = $"模型：{_modelName} · 追问已取消";
+        SetFollowUpBusy(false);
+    });
 
     private void RenderOutput(bool scrollToEnd = true)
     {
@@ -660,6 +706,42 @@ public partial class AiResultWindow : Window
         }
     }
 
+    public void SetFollowUpBusy(bool isBusy) => RunOnUiThread(() =>
+    {
+        FollowUpTextBox.IsEnabled = !isBusy;
+        FollowUpButton.IsEnabled = !isBusy;
+        FollowUpButton.Content = isBusy ? "回答中…" : "追问";
+        FollowUpPlaceholder.Text = isBusy
+            ? "正在生成回答…"
+            : "输入追问，Enter 发送，Shift+Enter 换行";
+    });
+
+    private void FollowUpButton_Click(object sender, RoutedEventArgs e) =>
+        SubmitFollowUp();
+
+    private void FollowUpTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Shift) == 0)
+        {
+            SubmitFollowUp();
+            e.Handled = true;
+        }
+    }
+
+    private void SubmitFollowUp()
+    {
+        string question = FollowUpTextBox.Text.Trim();
+        EventHandler<FollowUpRequestedEventArgs>? handler = FollowUpRequested;
+        if (!FollowUpTextBox.IsEnabled || question.Length == 0 || handler is null)
+        {
+            return;
+        }
+
+        FollowUpTextBox.Clear();
+        SetFollowUpBusy(true);
+        handler.Invoke(this, new FollowUpRequestedEventArgs(question));
+    }
+
     private void CopyButton_Click(object sender, RoutedEventArgs e)
     {
         if (_content.Length > 0)
@@ -670,4 +752,14 @@ public partial class AiResultWindow : Window
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) =>
         Close();
+}
+
+public sealed class FollowUpRequestedEventArgs : EventArgs
+{
+    public FollowUpRequestedEventArgs(string question)
+    {
+        Question = question;
+    }
+
+    public string Question { get; }
 }

@@ -11,6 +11,8 @@ namespace WindowsDiskScanner.App;
 
 public readonly record struct ChatStreamDelta(string Content, string ReasoningContent);
 
+public sealed record ChatMessage(string Role, string Content);
+
 public sealed class OpenAiChatClient
 {
     public async Task<IReadOnlyList<string>> FetchModelsAsync(
@@ -124,11 +126,24 @@ public sealed class OpenAiChatClient
         return content;
     }
 
-    public async Task SendChatStreamingAsync(
+    public Task SendChatStreamingAsync(
         LlmProvider provider,
         string model,
         string systemPrompt,
         string userPrompt,
+        Action<ChatStreamDelta> onDelta,
+        CancellationToken cancellationToken = default) =>
+        SendChatStreamingAsync(
+            provider,
+            model,
+            [new ChatMessage("system", systemPrompt), new ChatMessage("user", userPrompt)],
+            onDelta,
+            cancellationToken);
+
+    public async Task SendChatStreamingAsync(
+        LlmProvider provider,
+        string model,
+        IReadOnlyList<ChatMessage> messages,
         Action<ChatStreamDelta> onDelta,
         CancellationToken cancellationToken = default)
     {
@@ -140,11 +155,7 @@ public sealed class OpenAiChatClient
         request.Content = JsonContent.Create(new
         {
             model,
-            messages = new object[]
-            {
-                new { role = "system", content = systemPrompt },
-                new { role = "user", content = userPrompt }
-            },
+            messages = messages.Select(message => new { role = message.Role, content = message.Content }).ToArray(),
             stream = true
         });
 

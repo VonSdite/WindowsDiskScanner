@@ -114,6 +114,26 @@ public sealed class AiHistoryStore
         return record;
     }
 
+    public void UpdateContent(AiHistoryRecord record, string content, string reasoningContent)
+    {
+        record.Content = content;
+        record.ReasoningContent = reasoningContent;
+        lock (_syncRoot)
+        {
+            string path = GetRecordPath(record.Id);
+            if (!File.Exists(path))
+            {
+                return;
+            }
+
+            string temporaryPath = path + ".tmp";
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(record, JsonOptions));
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     public int Delete(IEnumerable<Guid> recordIds)
     {
         int deletedCount = 0;
