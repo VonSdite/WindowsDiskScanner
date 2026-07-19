@@ -1343,6 +1343,14 @@ public partial class AiResultWindow : Window
             : "输入追问，Enter 发送，Shift+Enter 换行";
     });
 
+    public void RestoreFollowUpQuestion(string question) => RunOnUiThread(() =>
+    {
+        SetFollowUpBusy(false);
+        FollowUpTextBox.Text = question;
+        FollowUpTextBox.CaretIndex = FollowUpTextBox.Text.Length;
+        FollowUpTextBox.Focus();
+    });
+
     private void FollowUpButton_Click(object sender, RoutedEventArgs e) =>
         SubmitFollowUp();
 

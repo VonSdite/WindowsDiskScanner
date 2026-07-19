@@ -473,6 +473,7 @@ public partial class MainWindow : Window
     {
         if (_aiOperationInProgress)
         {
+            ShowAiBusyDialog(this);
             return;
         }
 
@@ -585,9 +586,16 @@ public partial class MainWindow : Window
         AiHistoryRecord? historyRecord,
         string question)
     {
-        if (_aiOperationInProgress || !resultWindow.IsVisible)
+        if (!resultWindow.IsVisible)
         {
             resultWindow.SetFollowUpBusy(false);
+            return;
+        }
+
+        if (_aiOperationInProgress)
+        {
+            resultWindow.RestoreFollowUpQuestion(question);
+            ShowAiBusyDialog(resultWindow);
             return;
         }
 
@@ -687,6 +695,15 @@ public partial class MainWindow : Window
         {
             conversation.RemoveAt(conversation.Count - 1);
         }
+    }
+
+    private static void ShowAiBusyDialog(Window owner)
+    {
+        AiBusyDialog dialog = new()
+        {
+            Owner = owner
+        };
+        dialog.ShowDialog();
     }
 
     private void UpdateAiActionState()
